@@ -1,7 +1,7 @@
 <?php
 /**
  * Plugin Name: TW Cache Purger for Bunny CDN
- * Plugin URI: https://github.com/techweirdo/tw-cache-purger
+ * Plugin URI: https://github.com/drshounak/wordpress-plugins/tree/main/Cache%20Purger%20Plugins/bunnycdn_cache_purger
  * Description: Simple cache purger for Varnish and Bunny CDN with folder and tag support
  * Version: 2.2.1
  * Author: TechWeirdo
