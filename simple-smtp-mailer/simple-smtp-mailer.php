@@ -1,7 +1,7 @@
 <?php
 /**
  * Plugin Name: Simple SMTP Mailer
- * Plugin URI: https://github.com/drshounak/wordpress-plugins/simple-smtp-mailer
+ * Plugin URI: https://github.com/drshounak/wordpress-plugins/tree/main/simple-smtp-mailer
  * Description: Professional SMTP plugin with custom SMTP server settings for any provider. Easy setup and reliable email delivery.
  * Version: 1.0.0
  * Author: TechWeirdo
