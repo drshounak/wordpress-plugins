@@ -1,6 +1,6 @@
 <?php
  * Plugin Name: Simple Image Optimiser by TechWeirdo
- * Plugin URI: https://github.com/drshounak/wordpress-plugins/tree/main/cf7_enhanced_addon
+ * Plugin URI: https://github.com/drshounak/wordpress-plugins/tree/main/simple_image_optimiser
  * Description: Converts uploaded images to WebP format automatically with customizable compression and resizing
  * Version: 1.0.0
  * Author: TechWeirdo
