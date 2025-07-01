@@ -1,14 +1,19 @@
 <?php
 /**
  * Plugin Name: TW Fastly Cache Purger
- * Plugin URI: https://github.com/techweirdo/tw-fastly-cache-purger
+ * Plugin URI: https://github.com/drshounak/wordpress-plugins/tree/main/Cache%20Purger%20Plugins/fastly-cache-purger
  * Description: Advanced Fastly CDN cache purger with support for all purge methods
  * Version: 2.2.0
- * Author: Tech Weirdo
- * Author URI: https://www.techweirdo.net
+ * Author: TechWeirdo
+ * Author URI: https://twitter.com/drshounakpal
  * License: GPL v2 or later
  * License URI: https://www.gnu.org/licenses/gpl-2.0.html
  * Text Domain: tw-fastly-cache-purger
+ * Domain Path: /languages
+ * 
+ * @package TechWeirdo
+ * @author Dr. Shounak Pal
+ * @since 1.0.0
  */
 
 // Prevent direct access
