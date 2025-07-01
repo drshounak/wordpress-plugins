@@ -1,7 +1,7 @@
 <?php
 /**
  * Plugin Name: Custom Scripts Manager by TechWeirdo
- * Plugin URI: https://github.com/drshounak/wordpress-plugins/custom-scripts-manager
+ * Plugin URI: https://github.com/drshounak/wordpress-plugins/tree/main/custom-scripts-manager
  * Description: Add custom scripts to head or body for entire site or specific pages/posts
  * Version: 1.1
  * Author: TechWeirdo
