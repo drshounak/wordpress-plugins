@@ -1,21 +1,14 @@
 <?php
 /**
- * Plugin Name: 
+ * Plugin Name: Custom Scripts Manager by TechWeirdo
+ * Plugin URI: https://github.com/drshounak/wordpress-plugins/custom-scripts-manager
  * Description: Add custom scripts to head or body for entire site or specific pages/posts
  * Version: 1.1
- * Author: TechWeirdo
- * Author URI: https://techweirdo.net
- */
-/**
- * Plugin Name: Custom Scripts Manager by TechWeirdo
- * Plugin URI: https://github.com/drshounak/wordpress-plugins/simple-smtp-mailer
- * Description: Adds custom CSS functionality and message storage to Contact Form 7 forms
- * Version: 1.0.0
  * Author: TechWeirdo
  * Author URI: https://twitter.com/drshounakpal
  * License: GPL v2 or later
  * License URI: https://www.gnu.org/licenses/gpl-2.0.html
- * Text Domain: cf7-enhanced
+ * Text Domain: csm
  * Domain Path: /languages
  * 
  * @package TechWeirdo
