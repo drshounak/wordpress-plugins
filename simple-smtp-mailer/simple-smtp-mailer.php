@@ -1,24 +1,30 @@
 <?php
 /**
- * Plugin Name: Simple SMTP Mailer by TechWeirdo
+ * Plugin Name: Simple SMTP Mailer
  * Plugin URI: https://github.com/drshounak/wordpress-plugins/simple-smtp-mailer
- * Description: TechWeirdo’s professional SMTP plugin with custom SMTP server settings for any provider.
+ * Description: Professional SMTP plugin with custom SMTP server settings for any provider. Easy setup and reliable email delivery.
  * Version: 1.0.0
- * Author: Dr. Shounak Pal
- * Author URI: https://x.com/drshounakpal
+ * Author: TechWeirdo
+ * Author URI: https://twitter.com/drshounakpal
  * License: GPL v2 or later
  * License URI: https://www.gnu.org/licenses/gpl-2.0.html
+ * Text Domain: simple-smtp-mailer
+ * Domain Path: /languages
+ * 
+ * @package TechWeirdo
+ * @author Dr. Shounak Pal
+ * @since 1.0.0
  */
 
 // Prevent direct access
 defined('ABSPATH') or exit;
 
 // Define plugin constants
-define('ASM_PLUGIN_URL', plugin_dir_url(__FILE__));
-define('ASM_PLUGIN_PATH', plugin_dir_path(__FILE__));
-define('ASM_VERSION', '1.0.0');
+define('SSM_PLUGIN_URL', plugin_dir_url(__FILE__));
+define('SSM_PLUGIN_PATH', plugin_dir_path(__FILE__));
+define('SSM_VERSION', '1.0.0');
 
-class AdvancedSMTPMailer {
+class SimpleSMTPMailer {
     private $options;
 
     public function __construct() {
@@ -26,12 +32,12 @@ class AdvancedSMTPMailer {
         add_action('admin_menu', array($this, 'add_admin_menu'));
         add_action('admin_init', array($this, 'admin_init'));
         add_action('phpmailer_init', array($this, 'configure_phpmailer'));
-        add_action('wp_ajax_asm_test_email', array($this, 'test_email'));
+        add_action('wp_ajax_ssm_test_email', array($this, 'test_email'));
         register_activation_hook(__FILE__, array($this, 'activate'));
     }
 
     public function init() {
-        $this->options = get_option('asm_settings', array());
+        $this->options = get_option('ssm_settings', array());
     }
 
     public function activate() {
@@ -46,50 +52,50 @@ class AdvancedSMTPMailer {
             'from_name'      => get_option('blogname'),
             'debug_mode'     => 0,
         );
-        add_option('asm_settings', $default_options);
+        add_option('ssm_settings', $default_options);
     }
 
     public function add_admin_menu() {
         add_options_page(
-            'Advanced SMTP Settings',
+            'Simple SMTP Settings',
             'SMTP Mailer',
             'manage_options',
-            'advanced-smtp-mailer',
+            'simple-smtp-mailer',
             array($this, 'admin_page')
         );
     }
 
     public function admin_init() {
-        register_setting('asm_settings_group', 'asm_settings', array($this, 'sanitize_settings'));
+        register_setting('ssm_settings_group', 'ssm_settings', array($this, 'sanitize_settings'));
 
         add_settings_section(
-            'asm_general_section',
+            'ssm_general_section',
             'General Settings',
             array($this, 'general_section_callback'),
-            'advanced-smtp-mailer'
+            'simple-smtp-mailer'
         );
 
         add_settings_field(
             'from_email',
             'From Email',
             array($this, 'from_email_callback'),
-            'advanced-smtp-mailer',
-            'asm_general_section'
+            'simple-smtp-mailer',
+            'ssm_general_section'
         );
 
         add_settings_field(
             'from_name',
             'From Name',
             array($this, 'from_name_callback'),
-            'advanced-smtp-mailer',
-            'asm_general_section'
+            'simple-smtp-mailer',
+            'ssm_general_section'
         );
 
         add_settings_section(
-            'asm_smtp_section',
+            'ssm_smtp_section',
             'SMTP Settings',
             array($this, 'smtp_section_callback'),
-            'advanced-smtp-mailer'
+            'simple-smtp-mailer'
         );
 
         $this->add_smtp_fields();
@@ -110,8 +116,8 @@ class AdvancedSMTPMailer {
                 $field,
                 $label,
                 array($this, $field . '_callback'),
-                'advanced-smtp-mailer',
-                'asm_smtp_section'
+                'simple-smtp-mailer',
+                'ssm_smtp_section'
             );
         }
     }
@@ -139,27 +145,27 @@ class AdvancedSMTPMailer {
 
     public function from_email_callback() {
         $value = esc_attr($this->options['from_email'] ?? get_option('admin_email'));
-        echo '<input type="email" id="from_email" name="asm_settings[from_email]" value="' . $value . '" class="regular-text" required />';
+        echo '<input type="email" id="from_email" name="ssm_settings[from_email]" value="' . $value . '" class="regular-text" required />';
     }
 
     public function from_name_callback() {
         $value = esc_attr($this->options['from_name'] ?? get_option('blogname'));
-        echo '<input type="text" id="from_name" name="asm_settings[from_name]" value="' . $value . '" class="regular-text" />';
+        echo '<input type="text" id="from_name" name="ssm_settings[from_name]" value="' . $value . '" class="regular-text" />';
     }
 
     public function smtp_host_callback() {
         $value = esc_attr($this->options['smtp_host'] ?? '');
-        echo '<input type="text" id="smtp_host" name="asm_settings[smtp_host]" value="' . $value . '" class="regular-text" required />';
+        echo '<input type="text" id="smtp_host" name="ssm_settings[smtp_host]" value="' . $value . '" class="regular-text" required />';
     }
 
     public function smtp_port_callback() {
         $value = esc_attr($this->options['smtp_port'] ?? '587');
-        echo '<input type="number" id="smtp_port" name="asm_settings[smtp_port]" value="' . $value . '" class="small-text" required />';
+        echo '<input type="number" id="smtp_port" name="ssm_settings[smtp_port]" value="' . $value . '" class="small-text" required />';
     }
 
     public function smtp_encryption_callback() {
         $value = esc_attr($this->options['smtp_encryption'] ?? 'tls');
-        echo '<select id="smtp_encryption" name="asm_settings[smtp_encryption]">';
+        echo '<select id="smtp_encryption" name="ssm_settings[smtp_encryption]">';
         echo '<option value="none"' . selected($value, 'none', false) . '>None</option>';
         echo '<option value="ssl"' . selected($value, 'ssl', false) . '>SSL</option>';
         echo '<option value="tls"' . selected($value, 'tls', false) . '>TLS</option>';
@@ -168,17 +174,17 @@ class AdvancedSMTPMailer {
 
     public function smtp_username_callback() {
         $value = esc_attr($this->options['smtp_username'] ?? '');
-        echo '<input type="text" id="smtp_username" name="asm_settings[smtp_username]" value="' . $value . '" class="regular-text" />';
+        echo '<input type="text" id="smtp_username" name="ssm_settings[smtp_username]" value="' . $value . '" class="regular-text" />';
     }
 
     public function smtp_password_callback() {
         $value = esc_attr($this->options['smtp_password'] ?? '');
-        echo '<input type="password" id="smtp_password" name="asm_settings[smtp_password]" value="' . $value . '" class="regular-text" />';
+        echo '<input type="password" id="smtp_password" name="ssm_settings[smtp_password]" value="' . $value . '" class="regular-text" />';
     }
 
     public function debug_mode_callback() {
         $checked = !empty($this->options['debug_mode']) ? 'checked' : '';
-        echo '<label><input type="checkbox" id="debug_mode" name="asm_settings[debug_mode]" ' . $checked . ' /> Enable debug output</label>';
+        echo '<label><input type="checkbox" id="debug_mode" name="ssm_settings[debug_mode]" ' . $checked . ' /> Enable debug output</label>';
     }
 
     public function configure_phpmailer($phpmailer) {
@@ -199,12 +205,12 @@ class AdvancedSMTPMailer {
     }
 
     public function test_email() {
-        check_ajax_referer('asm_test_email', 'nonce');
+        check_ajax_referer('ssm_test_email', 'nonce');
         if (!current_user_can('manage_options')) {
             wp_die('Unauthorized');
         }
         $to      = sanitize_email($_POST['test_email']);
-        $subject = 'Test Email from Advanced SMTP Mailer';
+        $subject = 'Test Email from Simple SMTP Mailer';
         $message = 'This is a test email to verify your SMTP configuration.';
         $result  = wp_mail($to, $subject, $message);
         if ($result) {
@@ -217,11 +223,11 @@ class AdvancedSMTPMailer {
     public function admin_page() {
         ?>
         <div class="wrap">
-            <h1>Advanced SMTP Mailer Settings</h1>
+            <h1>Simple SMTP Mailer Settings</h1>
             <form method="post" action="options.php">
                 <?php
-                settings_fields('asm_settings_group');
-                do_settings_sections('advanced-smtp-mailer');
+                settings_fields('ssm_settings_group');
+                do_settings_sections('simple-smtp-mailer');
                 ?>
                 <h2>Send Test Email</h2>
                 <input type="email" id="test-email-address" placeholder="Enter test email address" class="regular-text" />
@@ -241,9 +247,9 @@ class AdvancedSMTPMailer {
             this.disabled = true;
             this.textContent = 'Sending...';
             var data = new FormData();
-            data.append('action', 'asm_test_email');
+            data.append('action', 'ssm_test_email');
             data.append('test_email', email);
-            data.append('nonce', '<?php echo wp_create_nonce('asm_test_email'); ?>');
+            data.append('nonce', '<?php echo wp_create_nonce('ssm_test_email'); ?>');
             fetch(ajaxurl, { method:'POST', body:data })
                 .then(res => res.json())
                 .then(data => {
@@ -261,11 +267,11 @@ class AdvancedSMTPMailer {
     }
 }
 
-new AdvancedSMTPMailer();
+new SimpleSMTPMailer();
 
 // Email logger
 add_action('wp_mail', function($args) {
-    $opts = get_option('asm_settings');
+    $opts = get_option('ssm_settings');
     if (!empty($opts['debug_mode'])) {
         error_log(sprintf("SMTP Log: To=%s Subject=%s", is_array($args['to']) ? implode(',', $args['to']) : $args['to'], $args['subject']));
     }
