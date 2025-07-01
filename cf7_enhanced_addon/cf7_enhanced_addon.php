@@ -1,7 +1,7 @@
 <?php
 /**
  * Plugin Name: Contact Form 7 Enhanced
- * Plugin URI: https://github.com/drshounak/wordpress-plugins/simple-smtp-mailer
+ * Plugin URI: https://github.com/drshounak/wordpress-plugins/tree/main/cf7_enhanced_addon
  * Description: Adds custom CSS functionality and message storage to Contact Form 7 forms
  * Version: 1.0.0
  * Author: TechWeirdo
