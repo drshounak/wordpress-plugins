@@ -307,7 +307,7 @@ class ProxyLoginBlocker {
             <script>
                 setTimeout(function() {
                     window.location.reload();
-                }, 5000);
+                }, 3000);
             </script>
         <?php elseif ($check_result === true): ?>
             <div class="icon success">✓</div>
@@ -316,7 +316,7 @@ class ProxyLoginBlocker {
             <script>
                 setTimeout(function() {
                     window.location.href = '<?php echo $this->create_bypass_url(); ?>';
-                }, 5000);
+                }, 3000);
             </script>
             <?php 
                 $_SESSION['plb_verified'] = time();
