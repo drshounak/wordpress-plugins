@@ -40,6 +40,9 @@ class ProxyLoginBlocker {
         
         // Add dashboard widget if enabled
         add_action('wp_dashboard_setup', array($this, 'add_dashboard_widget'));
+
+        // Add token to login form
+        add_action('login_form', array($this, 'modify_login_form'));
         
         // Start session for bypass tracking
         if (!session_id()) {
@@ -112,10 +115,16 @@ class ProxyLoginBlocker {
             exit;
         }
         
-        // Skip if already on proxy check page or if it's a POST request (actual login)
-        if (isset($_GET['proxy-check']) || $_SERVER['REQUEST_METHOD'] === 'POST') {
-            return;
-        }
+        // Skip if already on proxy check page
+if (isset($_GET['proxy-check'])) {
+    return;
+}
+
+// Handle POST requests (actual login attempts)
+if ($_SERVER['REQUEST_METHOD'] === 'POST') {
+    $this->handle_login_post();
+    return;
+}
         
         // Check if user has valid bypass token
         if (isset($_GET['plb_token']) && $this->verify_bypass_token($_GET['plb_token'])) {
@@ -134,6 +143,59 @@ class ProxyLoginBlocker {
         wp_redirect($redirect_url);
         exit;
     }
+
+    private function handle_login_post() {
+    // Check if user has valid bypass token in URL
+    if (isset($_GET['plb_token']) && $this->verify_bypass_token($_GET['plb_token'])) {
+        // Valid token, allow the POST request to proceed
+        $this->cleanup_current_token();
+        return;
+    }
+    
+    // Check if user already passed verification recently (session-based)
+    if (isset($_SESSION['plb_verified']) && $_SESSION['plb_verified'] > time() - 3600) { // 1 hour
+        return;
+    }
+    
+    // Check if plb_token is in POST data
+    if (isset($_POST['plb_token']) && $this->verify_bypass_token($_POST['plb_token'])) {
+        // Valid token, allow the POST request to proceed
+        $this->cleanup_current_token();
+        return;
+    }
+    
+    // No valid verification - block the POST request
+    wp_die(
+        '<h1>Access Denied</h1>
+        <p><strong>Security verification required.</strong></p>
+        <p>Please complete the security check before attempting to log in.</p>
+        <p><a href="' . wp_login_url() . '">← Return to Login</a></p>',
+        'Access Denied',
+        array('response' => 403)
+    );
+}
+
+    private function modify_login_form() {
+    // Only add token if we have one in session or URL
+    $token = '';
+    if (isset($_SESSION['plb_current_token'])) {
+        $token = $_SESSION['plb_current_token'];
+    } elseif (isset($_GET['plb_token'])) {
+        $token = $_GET['plb_token'];
+    }
+    
+    if ($token && $this->verify_bypass_token($token)) {
+        echo '<input type="hidden" name="plb_token" value="' . esc_attr($token) . '">';
+    }
+}
+
+    private function cleanup_current_token() {
+    if (isset($_SESSION['plb_current_token'])) {
+        $this->cleanup_bypass_token($_SESSION['plb_current_token']);
+        unset($_SESSION['plb_current_token']);
+    }
+}
+    
     
     private function show_proxy_check_page() {
         $user_ip = $this->get_user_ip();
@@ -332,13 +394,16 @@ class ProxyLoginBlocker {
     }
     
     private function create_bypass_url() {
-        $token = wp_generate_password(32, false);
-        $tokens = get_transient('plb_bypass_tokens') ?: array();
-        $tokens[$token] = time() + 300; // 5 minutes expiry
-        set_transient('plb_bypass_tokens', $tokens, 3600);
-        
-        return add_query_arg('plb_token', $token, wp_login_url());
-    }
+    $token = wp_generate_password(32, false);
+    $tokens = get_transient('plb_bypass_tokens') ?: array();
+    $tokens[$token] = time() + 300; // 5 minutes expiry
+    set_transient('plb_bypass_tokens', $tokens, 3600);
+    
+    // Store token in session for form inclusion
+    $_SESSION['plb_current_token'] = $token;
+    
+    return add_query_arg('plb_token', $token, wp_login_url());
+}
     
     private function verify_bypass_token($token) {
         $tokens = get_transient('plb_bypass_tokens');
