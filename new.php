@@ -5,6 +5,7 @@ class WPS_Security {
     private static $turnstile_login_added = false;
     private static $turnstile_lostpassword_added = false;
     private static $turnstile_comment_added = false;
+    private static $turnstile_register_added = false;
 
     public function __construct() {
         $this->options = get_option('wps_security_options', array());
@@ -90,7 +91,8 @@ class WPS_Security {
     private function init_turnstile() {
         $has_turnstile = $this->get_option('enable_turnstile_login') || 
                         $this->get_option('enable_turnstile_lostpassword') || 
-                        $this->get_option('enable_turnstile_comments');
+                        $this->get_option('enable_turnstile_comments') ||
+                        $this->get_option('enable_turnstile_register');
 
         if (!$has_turnstile) {
             return;
@@ -114,6 +116,12 @@ class WPS_Security {
             add_action('wp_enqueue_scripts', array($this, 'enqueue_turnstile_script_frontend'));
             add_filter('comment_form_submit_field', array($this, 'add_turnstile_to_comment_form'));
             add_filter('preprocess_comment', array($this, 'verify_comment_turnstile'));
+        }
+
+        if ($this->get_option('enable_turnstile_register')) {
+            add_action('login_enqueue_scripts', array($this, 'enqueue_turnstile_script'));
+    		add_action('register_form', array($this, 'add_turnstile_to_register'));
+    		add_action('registration_errors', array($this, 'verify_turnstile_register'), 10, 3);
         }
     }
 
@@ -652,6 +660,34 @@ class WPS_Security {
         
         return $commentdata;
     }
+
+    public function add_turnstile_to_register() {
+    // Prevent duplicate widget rendering
+    if (self::$turnstile_register_added) {
+        return;
+    }
+    
+    $keys = $this->get_turnstile_keys();
+    if (!empty($keys['site'])) {
+        echo '<div class="cf-turnstile" data-sitekey="' . esc_attr($keys['site']) . '" data-callback="registerTurnstileCallback" id="register-turnstile"></div>';
+        echo '<script>
+            function registerTurnstileCallback(token) {
+                document.getElementById("register-turnstile").style.marginBottom = "10px";
+            }
+        </script>';
+        self::$turnstile_register_added = true;
+    }
+}
+
+public function verify_turnstile_register($errors, $sanitized_user_login, $user_email) {
+    $captcha = isset($_POST['cf-turnstile-response']) ? sanitize_text_field($_POST['cf-turnstile-response']) : '';
+    
+    if (!$this->is_valid_captcha($captcha)) {
+        $errors->add('captcha_invalid', __('<center>Captcha verification failed. Please try again.</center>'));
+    }
+    
+    return $errors;
+}
 
     public function check_file_integrity() {
         $core_files = array(
