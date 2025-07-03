@@ -307,7 +307,7 @@ class ProxyLoginBlocker {
             <script>
                 setTimeout(function() {
                     window.location.reload();
-                }, 3000);
+                }, 5000);
             </script>
         <?php elseif ($check_result === true): ?>
             <div class="icon success">✓</div>
@@ -316,7 +316,7 @@ class ProxyLoginBlocker {
             <script>
                 setTimeout(function() {
                     window.location.href = '<?php echo $this->create_bypass_url(); ?>';
-                }, 3000);
+                }, 5000);
             </script>
             <?php 
                 $_SESSION['plb_verified'] = time();
@@ -903,7 +903,7 @@ class ProxyLoginBlocker {
             <h1>Proxy Login Blocker Settings</h1>
             
             <div id="rate-limit-info" style="background: #fff; padding: 15px; border: 1px solid #ddd; margin: 20px 0; border-radius: 5px;">
-                <h3>📊 API Rate Limit Status</h3>
+				<h3>📊 API Rate Limit Status (Not Very Accurate)</h3>
                 <div style="display: flex; gap: 20px; align-items: center;">
                     <div>
                         <strong>Remaining:</strong> <span id="remaining-requests" style="font-size: 18px; font-weight: bold;">Loading...</span>
@@ -939,9 +939,10 @@ class ProxyLoginBlocker {
                                 Use {IP} as placeholder for the IP address.<br>
                                 <strong>Examples:</strong><br>
                                 • <code>http://ip-api.com/json/{IP}?fields=16908288</code> (Free, 45/min limit)<br>
-                                • <code>https://proxycheck.io/v2/{IP}?vpn=1</code> (Free, 1000/day, 10000/day with free API key)<br>
-                                • <code>https://example.com/api/{IP}/proxy/json</code> (Custom API)<br>
-                                • <code>https://api.example.com/geo/proxy?ip={IP}</code> (Custom API)
+								• <code>https://proxycheck.io/v2/{IP}?vpn=1</code> (Free, 100/day No API, 1000/day with free API key)
+								<br>
+                                • <code>https://example.com/api/{IP}/json</code> (Custom API)<br>
+                                • <code>https://api.example.com/?ip={IP}</code> (Custom API)
                             </p>
                         </td>
                     </tr>
@@ -1013,27 +1014,13 @@ class ProxyLoginBlocker {
                         <td>
                             <input type="text" name="plb_rate_limit_headers" value="<?php echo esc_attr($rate_limit_headers); ?>" class="regular-text" />
                             <p class="description">
-                                Comma-separated list of header names for rate limit info (e.g., "x-rl,x-ttl" or "x-ratelimit-remaining,x-ratelimit-reset")
-                            </p>
+                                Comma-separated list of header names for rate limit info (e.g., "x-rl,x-ttl" or "x-ratelimit-remaining,x-ratelimit-reset") 
+                            </p>
                         </td>
                     </tr>
 
-                    <tr>
-                        <th scope="row">Custom Block Fields</th>
-                        <td>
-                            <textarea name="plb_custom_block_fields" rows="8" class="large-text"><?php echo esc_textarea($custom_block_fields); ?></textarea>
-                            <p class="description">
-                                Define custom fields and values to block. One rule per line.<br>
-                                <strong>Format:</strong> fieldname: value1, value2, value3<br>
-                                <strong>Examples:</strong><br>
-                                <code>country: CN, RU, IR</code><br>
-                                <code>asn: AS13335, AS15169</code><br>
-                                <code>threat: high, medium</code><br>
-                                <code>datacenter: true, yes, 1</code>
-                            </p>
-                        </td>
-                    </tr>
-                </table>
+                    
+                </table>
                 
                 <?php submit_button(); ?>
             </form>
