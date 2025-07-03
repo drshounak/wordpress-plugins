@@ -99,50 +99,45 @@ class ProxyLoginBlocker {
     }
     
     public function handle_login_check() {
-        // Only handle wp-login.php requests
-        if (!isset($_SERVER['SCRIPT_NAME']) || basename($_SERVER['SCRIPT_NAME']) !== 'wp-login.php') {
-            return;
-        }
-        
-        // Skip if plugin is disabled
-        if (!get_option('plb_enabled')) {
-            return;
-        }
-        
-        // Handle proxy check page
-        if (isset($_GET['proxy-check'])) {
-            $this->show_proxy_check_page();
-            exit;
-        }
-        
-        // Skip if already on proxy check page
-if (isset($_GET['proxy-check'])) {
-    return;
-}
-
-// Handle POST requests separately
-if ($_SERVER['REQUEST_METHOD'] === 'POST') {
-    $this->handle_post_request();
-    return;
-}
-        
-        // Check if user has valid bypass token
-        if (isset($_GET['plb_token']) && $this->verify_bypass_token($_GET['plb_token'])) {
-            // Valid token, allow access and clean up
-            $this->cleanup_bypass_token($_GET['plb_token']);
-            return;
-        }
-        
-        // Check if user already passed verification recently (session-based)
-        if (isset($_SESSION['plb_verified']) && $_SESSION['plb_verified'] > time() - 3600) { // 1 hour
-            return;
-        }
-        
-        // Redirect to proxy check page
-        $redirect_url = add_query_arg('proxy-check', '1', wp_login_url());
-        wp_redirect($redirect_url);
+    // Only handle wp-login.php requests
+    if (!isset($_SERVER['SCRIPT_NAME']) || basename($_SERVER['SCRIPT_NAME']) !== 'wp-login.php') {
+        return;
+    }
+    
+    // Skip if plugin is disabled
+    if (!get_option('plb_enabled')) {
+        return;
+    }
+    
+    // Handle proxy check page
+    if (isset($_GET['proxy-check'])) {
+        $this->show_proxy_check_page();
         exit;
     }
+    
+    // Handle POST requests (actual login attempts)
+    if ($_SERVER['REQUEST_METHOD'] === 'POST') {
+        $this->handle_post_request();
+        return;
+    }
+    
+    // Check if user has valid bypass token
+    if (isset($_GET['plb_token']) && $this->verify_bypass_token($_GET['plb_token'])) {
+        // Valid token, allow access and clean up
+        $this->cleanup_bypass_token($_GET['plb_token']);
+        return;
+    }
+    
+    // Check if user already passed verification recently (session-based)
+    if (isset($_SESSION['plb_verified']) && $_SESSION['plb_verified'] > time() - 3600) { // 1 hour
+        return;
+    }
+    
+    // Redirect to proxy check page
+    $redirect_url = add_query_arg('proxy-check', '1', wp_login_url());
+    wp_redirect($redirect_url);
+    exit;
+}
 
 private function handle_post_request() {
     // Allow if user has valid session
@@ -183,36 +178,7 @@ private function handle_post_request() {
     exit;
 }
     
-    private function handle_login_post() {
-    // Check if user has valid bypass token in URL
-    if (isset($_GET['plb_token']) && $this->verify_bypass_token($_GET['plb_token'])) {
-        // Valid token, allow the POST request to proceed
-        $this->cleanup_current_token();
-        return;
-    }
-    
-    // Check if user already passed verification recently (session-based)
-    if (isset($_SESSION['plb_verified']) && $_SESSION['plb_verified'] > time() - 3600) { // 1 hour
-        return;
-    }
-    
-    // Check if plb_token is in POST data
-    if (isset($_POST['plb_token']) && $this->verify_bypass_token($_POST['plb_token'])) {
-        // Valid token, allow the POST request to proceed
-        $this->cleanup_current_token();
-        return;
-    }
-    
-    // No valid verification - block the POST request
-    wp_die(
-        '<h1>Access Denied</h1>
-        <p><strong>Security verification required.</strong></p>
-        <p>Please complete the security check before attempting to log in.</p>
-        <p><a href="' . wp_login_url() . '">← Return to Login</a></p>',
-        'Access Denied',
-        array('response' => 403)
-    );
-}
+
 
     public function add_token_to_form() {
     // Only add if we have a token in the URL
@@ -220,27 +186,6 @@ private function handle_post_request() {
         echo '<input type="hidden" name="plb_token" value="' . esc_attr($_GET['plb_token']) . '">';
     }
     }
-
-    private function modify_login_form() {
-    // Only add token if we have one in session or URL
-    $token = '';
-    if (isset($_SESSION['plb_current_token'])) {
-        $token = $_SESSION['plb_current_token'];
-    } elseif (isset($_GET['plb_token'])) {
-        $token = $_GET['plb_token'];
-    }
-    
-    if ($token && $this->verify_bypass_token($token)) {
-        echo '<input type="hidden" name="plb_token" value="' . esc_attr($token) . '">';
-    }
-}
-
-    private function cleanup_current_token() {
-    if (isset($_SESSION['plb_current_token'])) {
-        $this->cleanup_bypass_token($_SESSION['plb_current_token']);
-        unset($_SESSION['plb_current_token']);
-    }
-}
     
     
     private function show_proxy_check_page() {
