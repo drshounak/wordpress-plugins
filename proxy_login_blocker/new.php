@@ -41,8 +41,8 @@ class ProxyLoginBlocker {
         // Add dashboard widget if enabled
         add_action('wp_dashboard_setup', array($this, 'add_dashboard_widget'));
 
-        // Add token to login form
-        add_action('login_form', array($this, 'modify_login_form'));
+        // Add hidden token to login form
+        add_action('login_form', array($this, 'add_token_to_form'));
         
         // Start session for bypass tracking
         if (!session_id()) {
@@ -120,9 +120,9 @@ if (isset($_GET['proxy-check'])) {
     return;
 }
 
-// Handle POST requests (actual login attempts)
+// Handle POST requests separately
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
-    $this->handle_login_post();
+    $this->handle_post_request();
     return;
 }
         
@@ -144,6 +144,45 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         exit;
     }
 
+private function handle_post_request() {
+    // Allow if user has valid session
+    if (isset($_SESSION['plb_verified']) && $_SESSION['plb_verified'] > time() - 3600) {
+        return; // Allow POST to proceed
+    }
+    
+    // Allow if valid token in URL
+    if (isset($_GET['plb_token']) && $this->verify_bypass_token($_GET['plb_token'])) {
+        return; // Allow POST to proceed
+    }
+    
+    // Allow if valid token in POST data
+    if (isset($_POST['plb_token']) && $this->verify_bypass_token($_POST['plb_token'])) {
+        return; // Allow POST to proceed
+    }
+    
+    // Block unauthorized POST
+    status_header(403);
+    echo '<!DOCTYPE html>
+    <html>
+    <head>
+        <title>Access Denied</title>
+        <style>
+            body { font-family: Arial, sans-serif; text-align: center; padding: 50px; }
+            .container { max-width: 400px; margin: 0 auto; }
+            .error { color: #e74c3c; }
+        </style>
+    </head>
+    <body>
+        <div class="container">
+            <h1 class="error">Access Denied</h1>
+            <p>Security verification required before login.</p>
+            <a href="' . wp_login_url() . '">Return to Login</a>
+        </div>
+    </body>
+    </html>';
+    exit;
+}
+    
     private function handle_login_post() {
     // Check if user has valid bypass token in URL
     if (isset($_GET['plb_token']) && $this->verify_bypass_token($_GET['plb_token'])) {
@@ -174,6 +213,13 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         array('response' => 403)
     );
 }
+
+    public function add_token_to_form() {
+    // Only add if we have a token in the URL
+    if (isset($_GET['plb_token']) && $this->verify_bypass_token($_GET['plb_token'])) {
+        echo '<input type="hidden" name="plb_token" value="' . esc_attr($_GET['plb_token']) . '">';
+    }
+    }
 
     private function modify_login_form() {
     // Only add token if we have one in session or URL
