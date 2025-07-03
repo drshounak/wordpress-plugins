@@ -3,7 +3,7 @@
  * Plugin Name: Proxy Login Blocker by TechWeirdo
  * Plugin URI: https://github.com/drshounak/wordpress-plugins/tree/main/proxy_login_blocker
  * Description: Blocks proxy and hosting IPs from accessing WordPress login page with customizable API endpoints
- * Version: 2.0.0
+ * Version: 2.0.1
  * Author: TechWeirdo
  * Author URI: https://twitter.com/drshounakpal
  * License: GPL v2 or later
