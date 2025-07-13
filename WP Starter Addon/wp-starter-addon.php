@@ -534,12 +534,135 @@ class WPSA_SMTPMailer {
 
     public function __construct() {
         add_action('init', array($this, 'init'));
+        add_action('admin_init', array($this, 'admin_init'));
         add_action('phpmailer_init', array($this, 'configure_phpmailer'));
         add_action('wp_ajax_ssm_test_email', array($this, 'test_email'));
     }
 
     public function init() {
         $this->options = get_option('ssm_settings', array());
+    }
+
+    public function admin_init() {
+        register_setting('ssm_settings_group', 'ssm_settings', array($this, 'sanitize_settings'));
+
+        add_settings_section(
+            'ssm_general_section',
+            'General Settings',
+            array($this, 'general_section_callback'),
+            'simple-smtp-mailer'
+        );
+
+        add_settings_field(
+            'from_email',
+            'From Email',
+            array($this, 'from_email_callback'),
+            'simple-smtp-mailer',
+            'ssm_general_section'
+        );
+
+        add_settings_field(
+            'from_name',
+            'From Name',
+            array($this, 'from_name_callback'),
+            'simple-smtp-mailer',
+            'ssm_general_section'
+        );
+
+        add_settings_section(
+            'ssm_smtp_section',
+            'SMTP Settings',
+            array($this, 'smtp_section_callback'),
+            'simple-smtp-mailer'
+        );
+
+        $this->add_smtp_fields();
+    }
+
+    private function add_smtp_fields() {
+        $smtp_fields = array(
+            'smtp_host'       => 'SMTP Host',
+            'smtp_port'       => 'SMTP Port',
+            'smtp_encryption' => 'Encryption',
+            'smtp_username'   => 'Username',
+            'smtp_password'   => 'Password',
+            'debug_mode'      => 'Enable Debug Mode'
+        );
+
+        foreach ($smtp_fields as $field => $label) {
+            add_settings_field(
+                $field,
+                $label,
+                array($this, $field . '_callback'),
+                'simple-smtp-mailer',
+                'ssm_smtp_section'
+            );
+        }
+    }
+
+    public function sanitize_settings($input) {
+        $sanitized = array();
+        $sanitized['smtp_host']       = sanitize_text_field($input['smtp_host']);
+        $sanitized['smtp_port']       = intval($input['smtp_port']);
+        $sanitized['smtp_encryption'] = sanitize_text_field($input['smtp_encryption']);
+        $sanitized['smtp_username']   = sanitize_text_field($input['smtp_username']);
+        $sanitized['smtp_password']   = $input['smtp_password'];
+        $sanitized['from_email']      = sanitize_email($input['from_email']);
+        $sanitized['from_name']       = sanitize_text_field($input['from_name']);
+        $sanitized['debug_mode']      = isset($input['debug_mode']) ? 1 : 0;
+        return $sanitized;
+    }
+
+    public function general_section_callback() {
+        echo '<p>Configure your email settings below.</p>';
+    }
+
+    public function smtp_section_callback() {
+        echo '<p>Configure SMTP server settings.</p>';
+    }
+
+    public function from_email_callback() {
+        $value = esc_attr($this->options['from_email'] ?? get_option('admin_email'));
+        echo '<input type="email" id="from_email" name="ssm_settings[from_email]" value="' . $value . '" class="regular-text" required />';
+    }
+
+    public function from_name_callback() {
+        $value = esc_attr($this->options['from_name'] ?? get_option('blogname'));
+        echo '<input type="text" id="from_name" name="ssm_settings[from_name]" value="' . $value . '" class="regular-text" />';
+    }
+
+    public function smtp_host_callback() {
+        $value = esc_attr($this->options['smtp_host'] ?? '');
+        echo '<input type="text" id="smtp_host" name="ssm_settings[smtp_host]" value="' . $value . '" class="regular-text" required />';
+    }
+
+    public function smtp_port_callback() {
+        $value = esc_attr($this->options['smtp_port'] ?? '587');
+        echo '<input type="number" id="smtp_port" name="ssm_settings[smtp_port]" value="' . $value . '" class="small-text" required />';
+    }
+
+    public function smtp_encryption_callback() {
+        $value = esc_attr($this->options['smtp_encryption'] ?? 'tls');
+        echo '<select id="smtp_encryption" name="ssm_settings[smtp_encryption]">';
+        echo '<option value="none"' . selected($value, 'none', false) . '>None</option>';
+        echo '<option value="ssl"' . selected($value, 'ssl', false) . '>SSL</option>';
+        echo '<option value="tls"' . selected($value, 'tls', false) . '>TLS</option>';
+        echo '</select>';
+    }
+
+    public function smtp_username_callback() {
+        $value = esc_attr($this->options['smtp_username'] ?? '');
+        echo '<input type="text" id="smtp_username" name="ssm_settings[smtp_username]" value="' . $value . '" class="regular-text" />';
+    }
+
+    public function smtp_password_callback() {
+        $value = esc_attr($this->options['smtp_password'] ?? '');
+        echo '<input type="password" id="smtp_password" name="ssm_settings[smtp_password]" value="' . $value . '" class="regular-text" />';
+    }
+
+    public function debug_mode_callback() {
+        $checked = !empty($this->options['debug_mode']) ? 'checked' : '';
+        echo '<label><input type="checkbox" id="debug_mode" name="ssm_settings[debug_mode]" ' . $checked . ' /> Enable debug output</label>';
     }
 
     public function configure_phpmailer($phpmailer) {
@@ -584,14 +707,14 @@ class WPSA_SMTPMailer {
             check_admin_referer('ssm_settings_action', 'ssm_settings_nonce');
             
             $settings = array(
-                'smtp_host' => sanitize_text_field($_POST['smtp_host']),
-                'smtp_port' => intval($_POST['smtp_port']),
-                'smtp_encryption' => sanitize_text_field($_POST['smtp_encryption']),
-                'smtp_username' => sanitize_text_field($_POST['smtp_username']),
-                'smtp_password' => $_POST['smtp_password'],
-                'from_email' => sanitize_email($_POST['from_email']),
-                'from_name' => sanitize_text_field($_POST['from_name']),
-                'debug_mode' => isset($_POST['debug_mode']) ? 1 : 0,
+                'smtp_host' => sanitize_text_field($_POST['ssm_settings']['smtp_host']),
+                'smtp_port' => intval($_POST['ssm_settings']['smtp_port']),
+                'smtp_encryption' => sanitize_text_field($_POST['ssm_settings']['smtp_encryption']),
+                'smtp_username' => sanitize_text_field($_POST['ssm_settings']['smtp_username']),
+                'smtp_password' => $_POST['ssm_settings']['smtp_password'],
+                'from_email' => sanitize_email($_POST['ssm_settings']['from_email']),
+                'from_name' => sanitize_text_field($_POST['ssm_settings']['from_name']),
+                'debug_mode' => isset($_POST['ssm_settings']['debug_mode']) ? 1 : 0,
             );
             
             update_option('ssm_settings', $settings);
@@ -608,104 +731,135 @@ class WPSA_SMTPMailer {
             <form method="post" action="">
                 <?php wp_nonce_field('ssm_settings_action', 'ssm_settings_nonce'); ?>
                 
+                <h2>General Settings</h2>
                 <table class="form-table">
                     <tr>
                         <th scope="row">From Email</th>
                         <td>
-                            <input type="email" name="from_email" value="<?php echo esc_attr($this->options['from_email'] ?? get_option('admin_email')); ?>" class="regular-text" required />
+                            <?php $this->from_email_callback(); ?>
+                            <p class="description">The email address that emails are sent from.</p>
                         </td>
                     </tr>
                     <tr>
                         <th scope="row">From Name</th>
                         <td>
-                            <input type="text" name="from_name" value="<?php echo esc_attr($this->options['from_name'] ?? get_option('blogname')); ?>" class="regular-text" />
+                            <?php $this->from_name_callback(); ?>
+                            <p class="description">The name that emails are sent from.</p>
                         </td>
                     </tr>
+                </table>
+                
+                <h2>SMTP Settings</h2>
+                <table class="form-table">
                     <tr>
                         <th scope="row">SMTP Host</th>
                         <td>
-                            <input type="text" name="smtp_host" value="<?php echo esc_attr($this->options['smtp_host'] ?? ''); ?>" class="regular-text" required />
+                            <?php $this->smtp_host_callback(); ?>
+                            <p class="description">Your SMTP server hostname (e.g., smtp.gmail.com).</p>
                         </td>
                     </tr>
                     <tr>
                         <th scope="row">SMTP Port</th>
                         <td>
-                            <input type="number" name="smtp_port" value="<?php echo esc_attr($this->options['smtp_port'] ?? '587'); ?>" class="small-text" required />
+                            <?php $this->smtp_port_callback(); ?>
+                            <p class="description">The port to use (usually 587 for TLS, 465 for SSL, 25 for none).</p>
                         </td>
                     </tr>
                     <tr>
                         <th scope="row">Encryption</th>
                         <td>
-                            <select name="smtp_encryption">
-                                <option value="none" <?php selected($this->options['smtp_encryption'] ?? 'tls', 'none'); ?>>None</option>
-                                <option value="ssl" <?php selected($this->options['smtp_encryption'] ?? 'tls', 'ssl'); ?>>SSL</option>
-                                <option value="tls" <?php selected($this->options['smtp_encryption'] ?? 'tls', 'tls'); ?>>TLS</option>
-                            </select>
+                            <?php $this->smtp_encryption_callback(); ?>
+                            <p class="description">Choose the encryption method (TLS recommended).</p>
                         </td>
                     </tr>
                     <tr>
                         <th scope="row">Username</th>
                         <td>
-                            <input type="text" name="smtp_username" value="<?php echo esc_attr($this->options['smtp_username'] ?? ''); ?>" class="regular-text" />
+                            <?php $this->smtp_username_callback(); ?>
+                            <p class="description">Your SMTP username (usually your email address).</p>
                         </td>
                     </tr>
                     <tr>
                         <th scope="row">Password</th>
                         <td>
-                            <input type="password" name="smtp_password" value="<?php echo esc_attr($this->options['smtp_password'] ?? ''); ?>" class="regular-text" />
+                            <?php $this->smtp_password_callback(); ?>
+                            <p class="description">Your SMTP password or app-specific password.</p>
                         </td>
                     </tr>
                     <tr>
                         <th scope="row">Debug Mode</th>
                         <td>
-                            <label>
-                                <input type="checkbox" name="debug_mode" <?php checked(!empty($this->options['debug_mode'])); ?> />
-                                Enable debug output
-                            </label>
+                            <?php $this->debug_mode_callback(); ?>
+                            <p class="description">Enable to see detailed SMTP debug information.</p>
                         </td>
                     </tr>
                 </table>
                 
-                <h2>Send Test Email</h2>
-                <input type="email" id="test-email-address" placeholder="Enter test email address" class="regular-text" />
-                <button type="button" id="send-test-email" class="button button-primary">Send Test Email</button>
-                <div id="test-result" style="margin-top:10px;font-weight:bold;"></div>
+                <h2>Test Email</h2>
+                <table class="form-table">
+                    <tr>
+                        <th scope="row">Send Test Email</th>
+                        <td>
+                            <input type="email" id="test-email-address" placeholder="Enter test email address" class="regular-text" />
+                            <button type="button" id="send-test-email" class="button button-secondary">Send Test Email</button>
+                            <div id="test-result" style="margin-top:10px;font-weight:bold;"></div>
+                            <p class="description">Send a test email to verify your SMTP configuration.</p>
+                        </td>
+                    </tr>
+                </table>
                 
                 <?php submit_button('Save SMTP Settings'); ?>
             </form>
         </div>
         
         <script>
-        document.getElementById('send-test-email').addEventListener('click', function() {
-            var email = document.getElementById('test-email-address').value;
-            var result = document.getElementById('test-result');
-            if (!email) {
-                result.innerHTML = '<span style="color:red;">Please enter an email address.</span>';
-                return;
-            }
-            this.disabled = true;
-            this.textContent = 'Sending...';
-            var data = new FormData();
-            data.append('action', 'ssm_test_email');
-            data.append('test_email', email);
-            data.append('nonce', '<?php echo wp_create_nonce('ssm_test_email'); ?>');
-            fetch(ajaxurl, { method:'POST', body:data })
-                .then(res => res.json())
+        document.addEventListener('DOMContentLoaded', function() {
+            document.getElementById('send-test-email').addEventListener('click', function() {
+                var email = document.getElementById('test-email-address').value;
+                var result = document.getElementById('test-result');
+                var button = this;
+                
+                if (!email) {
+                    result.innerHTML = '<span style="color:red;">Please enter an email address.</span>';
+                    return;
+                }
+                
+                button.disabled = true;
+                button.textContent = 'Sending...';
+                result.innerHTML = '';
+                
+                var data = new FormData();
+                data.append('action', 'ssm_test_email');
+                data.append('test_email', email);
+                data.append('nonce', '<?php echo wp_create_nonce('ssm_test_email'); ?>');
+                
+                fetch(ajaxurl, { 
+                    method: 'POST', 
+                    body: data 
+                })
+                .then(response => response.json())
                 .then(data => {
-                    document.getElementById('send-test-email').disabled = false;
-                    document.getElementById('send-test-email').textContent = 'Send Test Email';
-                    result.innerHTML = data.success ? '<span style="color:green;">'+data.data+'</span>' : '<span style="color:red;">'+data.data+'</span>';
-                }).catch(() => {
-                    document.getElementById('send-test-email').disabled = false;
-                    document.getElementById('send-test-email').textContent = 'Send Test Email';
+                    button.disabled = false;
+                    button.textContent = 'Send Test Email';
+                    
+                    if (data.success) {
+                        result.innerHTML = '<span style="color:green;">' + data.data + '</span>';
+                    } else {
+                        result.innerHTML = '<span style="color:red;">' + data.data + '</span>';
+                    }
+                })
+                .catch(error => {
+                    button.disabled = false;
+                    button.textContent = 'Send Test Email';
                     result.innerHTML = '<span style="color:red;">Error sending test email.</span>';
+                    console.error('Error:', error);
                 });
+            });
         });
         </script>
         <?php
     }
 }
-
 /**
  * Image Optimizer Module
  */
