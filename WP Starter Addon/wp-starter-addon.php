@@ -2,8 +2,8 @@
 /**
  * Plugin Name: WP Starter Addon by TechWeirdo
  * Plugin URI: https://github.com/drshounak/wordpress-plugins/tree/main/wp-starter-addon
- * Description: Complete WordPress toolkit with Custom Scripts Manager, SMTP Mailer, Image Optimizer, and Email 2FA - all in one plugin
- * Version: 2.0.0
+ * Description: Complete WordPress toolkit with Custom Scripts Manager, SMTP Mailer, Image Optimizer, and Email 2FA - all in one powerful plugin.
+ * Version: 1.0.0
  * Author: TechWeirdo
  * Author URI: https://twitter.com/drshounakpal
  * License: GPL v2 or later
@@ -13,7 +13,7 @@
  * 
  * @package TechWeirdo
  * @author Dr. Shounak Pal
- * @since 2.0.0
+ * @since 1.0.0
  */
 
 // Prevent direct access
@@ -22,7 +22,7 @@ if (!defined('ABSPATH')) {
 }
 
 // Define plugin constants
-define('WPSA_VERSION', '2.0.0');
+define('WPSA_VERSION', '1.0.0');
 define('WPSA_PLUGIN_URL', plugin_dir_url(__FILE__));
 define('WPSA_PLUGIN_PATH', plugin_dir_path(__FILE__));
 
@@ -32,11 +32,7 @@ define('WPSA_PLUGIN_PATH', plugin_dir_path(__FILE__));
 class WPStarterAddon {
     
     private static $instance = null;
-    private $modules = array();
     
-    /**
-     * Get plugin instance
-     */
     public static function get_instance() {
         if (null === self::$instance) {
             self::$instance = new self();
@@ -44,487 +40,293 @@ class WPStarterAddon {
         return self::$instance;
     }
     
-    /**
-     * Constructor
-     */
     private function __construct() {
-        $this->init_hooks();
-        $this->load_modules();
-    }
-    
-    /**
-     * Initialize hooks
-     */
-    private function init_hooks() {
-        register_activation_hook(__FILE__, array($this, 'activate'));
-        register_deactivation_hook(__FILE__, array($this, 'deactivate'));
-        
-        add_action('plugins_loaded', array($this, 'load_textdomain'));
+        add_action('init', array($this, 'init'));
         add_action('admin_menu', array($this, 'add_admin_menu'));
         add_action('admin_enqueue_scripts', array($this, 'enqueue_admin_scripts'));
-        add_action('admin_init', array($this, 'migrate_old_settings'));
+        
+        // Initialize modules based on settings
+        add_action('plugins_loaded', array($this, 'init_modules'));
+        
+        // Activation hook
+        register_activation_hook(__FILE__, array($this, 'activate'));
     }
     
-    /**
-     * Plugin activation
-     */
+    public function init() {
+        load_plugin_textdomain('wp-starter-addon', false, dirname(plugin_basename(__FILE__)) . '/languages');
+    }
+    
     public function activate() {
-        // Set default module states
-        $default_modules = array(
-            'custom_scripts' => true,
-            'smtp_mailer' => true,
-            'image_optimizer' => true,
-            'email_2fa' => true
+        // Set default module settings
+        $default_settings = array(
+            'custom_scripts' => '1',
+            'smtp_mailer' => '1',
+            'image_optimizer' => '1',
+            'email_2fa' => '1'
         );
+        add_option('wpsa_modules', $default_settings);
         
-        add_option('wpsa_modules', $default_modules);
-        add_option('wpsa_version', WPSA_VERSION);
-        
-        // Migrate settings from old plugins if they exist
-        $this->migrate_old_settings();
+        // Initialize default settings for each module
+        $this->init_default_settings();
     }
     
-    /**
-     * Plugin deactivation
-     */
-    public function deactivate() {
-        // Clean up scheduled events
-        wp_clear_scheduled_hook('email_otp_cleanup_event');
-    }
-    
-    /**
-     * Load text domain
-     */
-    public function load_textdomain() {
-        load_plugin_textdomain(
-            'wp-starter-addon', 
-            false, 
-            dirname(plugin_basename(__FILE__)) . '/languages'
+    private function init_default_settings() {
+        // Custom Scripts Manager defaults
+        add_option('csm_global_head_scripts', '');
+        add_option('csm_global_body_scripts', '');
+        
+        // SMTP Mailer defaults
+        $smtp_defaults = array(
+            'smtp_host' => '',
+            'smtp_port' => '587',
+            'smtp_encryption' => 'tls',
+            'smtp_auth' => 1,
+            'smtp_username' => '',
+            'smtp_password' => '',
+            'from_email' => get_option('admin_email'),
+            'from_name' => get_option('blogname'),
+            'debug_mode' => 0,
         );
+        add_option('ssm_settings', $smtp_defaults);
+        
+        // Image Optimizer defaults
+        $image_defaults = array(
+            'max_width' => 2400,
+            'max_height' => 2400,
+            'output_format' => 'webp',
+            'quality' => 85,
+            'keep_original' => false,
+            'auto_convert' => true
+        );
+        add_option('aic_settings', $image_defaults);
+        
+        // Email 2FA defaults
+        add_option('email_otp_login_enabled', '1');
+        add_option('email_otp_login_expiry', '10');
+        add_option('email_otp_login_rate_limit', '60');
     }
     
-    /**
-     * Migrate settings from old plugins
-     */
-    public function migrate_old_settings() {
-        // Only run migration once
-        if (get_option('wpsa_migration_done')) {
-            return;
+    public function init_modules() {
+        $modules = get_option('wpsa_modules', array());
+        
+        if (!empty($modules['custom_scripts'])) {
+            new WPSA_CustomScriptsManager();
         }
         
-        // Migrate Custom Scripts Manager settings
-        if (get_option('csm_global_head_scripts') !== false) {
-            update_option('wpsa_csm_global_head_scripts', get_option('csm_global_head_scripts'));
-            update_option('wpsa_csm_global_body_scripts', get_option('csm_global_body_scripts'));
+        if (!empty($modules['smtp_mailer'])) {
+            new WPSA_SMTPMailer();
         }
         
-        // Migrate SMTP settings
-        if (get_option('ssm_settings') !== false) {
-            update_option('wpsa_smtp_settings', get_option('ssm_settings'));
+        if (!empty($modules['image_optimizer'])) {
+            new WPSA_ImageOptimizer();
         }
         
-        // Migrate Image Optimizer settings
-        if (get_option('aic_settings') !== false) {
-            update_option('wpsa_image_settings', get_option('aic_settings'));
-        }
-        
-        // Migrate Email 2FA settings
-        if (get_option('email_otp_login_enabled') !== false) {
-            $otp_settings = array(
-                'enabled' => get_option('email_otp_login_enabled', '1'),
-                'expiry' => get_option('email_otp_login_expiry', '10'),
-                'rate_limit' => get_option('email_otp_login_rate_limit', '60')
-            );
-            update_option('wpsa_otp_settings', $otp_settings);
-        }
-        
-        update_option('wpsa_migration_done', true);
-    }
-    
-    /**
-     * Load modules based on settings
-     */
-    private function load_modules() {
-        $enabled_modules = get_option('wpsa_modules', array());
-        
-        if (!empty($enabled_modules['custom_scripts'])) {
-            $this->modules['custom_scripts'] = new WPSA_CustomScripts();
-        }
-        
-        if (!empty($enabled_modules['smtp_mailer'])) {
-            $this->modules['smtp_mailer'] = new WPSA_SMTPMailer();
-        }
-        
-        if (!empty($enabled_modules['image_optimizer'])) {
-            $this->modules['image_optimizer'] = new WPSA_ImageOptimizer();
-        }
-        
-        if (!empty($enabled_modules['email_2fa'])) {
-            $this->modules['email_2fa'] = new WPSA_Email2FA();
+        if (!empty($modules['email_2fa'])) {
+            new WPSA_Email2FA();
         }
     }
     
-    /**
-     * Add admin menu
-     */
     public function add_admin_menu() {
         add_menu_page(
-            __('WP Starter Addon', 'wp-starter-addon'),
-            __('WP Starter Addon', 'wp-starter-addon'),
+            'WP Starter Addon',
+            'WP Starter Addon',
             'manage_options',
             'wp-starter-addon',
-            array($this, 'admin_dashboard'),
+            array($this, 'main_admin_page'),
             'dashicons-admin-tools',
             30
         );
         
         // Add submenus for each module
-        $enabled_modules = get_option('wpsa_modules', array());
+        $modules = get_option('wpsa_modules', array());
         
-        if (!empty($enabled_modules['custom_scripts'])) {
+        if (!empty($modules['custom_scripts'])) {
             add_submenu_page(
                 'wp-starter-addon',
-                __('Custom Scripts', 'wp-starter-addon'),
-                __('Custom Scripts', 'wp-starter-addon'),
+                'Custom Scripts',
+                'Custom Scripts',
                 'manage_options',
                 'wpsa-custom-scripts',
                 array($this, 'custom_scripts_page')
             );
         }
         
-        if (!empty($enabled_modules['smtp_mailer'])) {
+        if (!empty($modules['smtp_mailer'])) {
             add_submenu_page(
                 'wp-starter-addon',
-                __('SMTP Settings', 'wp-starter-addon'),
-                __('SMTP Settings', 'wp-starter-addon'),
+                'SMTP Mailer',
+                'SMTP Mailer',
                 'manage_options',
-                'wpsa-smtp-settings',
-                array($this, 'smtp_settings_page')
+                'wpsa-smtp-mailer',
+                array($this, 'smtp_mailer_page')
             );
         }
         
-        if (!empty($enabled_modules['image_optimizer'])) {
+        if (!empty($modules['image_optimizer'])) {
             add_submenu_page(
                 'wp-starter-addon',
-                __('Image Optimizer', 'wp-starter-addon'),
-                __('Image Optimizer', 'wp-starter-addon'),
+                'Image Optimizer',
+                'Image Optimizer',
                 'manage_options',
                 'wpsa-image-optimizer',
                 array($this, 'image_optimizer_page')
             );
         }
         
-        if (!empty($enabled_modules['email_2fa'])) {
+        if (!empty($modules['email_2fa'])) {
             add_submenu_page(
                 'wp-starter-addon',
-                __('Email 2FA', 'wp-starter-addon'),
-                __('Email 2FA', 'wp-starter-addon'),
+                'Email 2FA',
+                'Email 2FA',
                 'manage_options',
                 'wpsa-email-2fa',
                 array($this, 'email_2fa_page')
             );
         }
-        
-        // Settings submenu
-        add_submenu_page(
-            'wp-starter-addon',
-            __('Module Settings', 'wp-starter-addon'),
-            __('Module Settings', 'wp-starter-addon'),
-            'manage_options',
-            'wpsa-module-settings',
-            array($this, 'module_settings_page')
-        );
     }
     
-    /**
-     * Enqueue admin scripts
-     */
     public function enqueue_admin_scripts($hook) {
         if (strpos($hook, 'wp-starter-addon') !== false) {
-            wp_enqueue_style(
-                'wpsa-admin-style',
-                WPSA_PLUGIN_URL . 'assets/admin.css',
-                array(),
-                WPSA_VERSION
-            );
-            
-            wp_enqueue_script(
-                'wpsa-admin-script',
-                WPSA_PLUGIN_URL . 'assets/admin.js',
-                array('jquery'),
-                WPSA_VERSION,
-                true
-            );
+            wp_enqueue_script('jquery');
+            wp_enqueue_style('wpsa-admin-style', WPSA_PLUGIN_URL . 'assets/admin.css', array(), WPSA_VERSION);
         }
     }
     
-    /**
-     * Main dashboard page
-     */
-    public function admin_dashboard() {
-        $enabled_modules = get_option('wpsa_modules', array());
+    public function main_admin_page() {
+        if (isset($_POST['submit'])) {
+            check_admin_referer('wpsa_modules_settings');
+            
+            $modules = array(
+                'custom_scripts' => isset($_POST['custom_scripts']) ? '1' : '0',
+                'smtp_mailer' => isset($_POST['smtp_mailer']) ? '1' : '0',
+                'image_optimizer' => isset($_POST['image_optimizer']) ? '1' : '0',
+                'email_2fa' => isset($_POST['email_2fa']) ? '1' : '0'
+            );
+            
+            update_option('wpsa_modules', $modules);
+            echo '<div class="notice notice-success"><p>Settings saved successfully! Please refresh the page to see menu changes.</p></div>';
+        }
+        
+        $modules = get_option('wpsa_modules', array());
         ?>
-        <div class="wrap wpsa-dashboard">
-            <h1><?php _e('WP Starter Addon by TechWeirdo', 'wp-starter-addon'); ?></h1>
+        <div class="wrap">
+            <h1>WP Starter Addon by TechWeirdo</h1>
+            <p>Welcome to WP Starter Addon - your complete WordPress toolkit! Enable or disable modules as needed.</p>
             
-            <div class="wpsa-dashboard-grid">
-                <div class="wpsa-module-card <?php echo !empty($enabled_modules['custom_scripts']) ? 'enabled' : 'disabled'; ?>">
-                    <div class="wpsa-module-icon">📝</div>
-                    <h3><?php _e('Custom Scripts Manager', 'wp-starter-addon'); ?></h3>
-                    <p><?php _e('Add custom scripts to head or body for entire site or specific pages/posts', 'wp-starter-addon'); ?></p>
-                    <div class="wpsa-module-actions">
-                        <?php if (!empty($enabled_modules['custom_scripts'])): ?>
-                            <a href="<?php echo admin_url('admin.php?page=wpsa-custom-scripts'); ?>" class="button button-primary"><?php _e('Configure', 'wp-starter-addon'); ?></a>
-                        <?php else: ?>
-                            <span class="wpsa-disabled-text"><?php _e('Module Disabled', 'wp-starter-addon'); ?></span>
-                        <?php endif; ?>
+            <form method="post" action="">
+                <?php wp_nonce_field('wpsa_modules_settings'); ?>
+                
+                <div class="wpsa-modules-grid">
+                    <div class="wpsa-module-card">
+                        <h3>🔧 Custom Scripts Manager</h3>
+                        <p>Add custom scripts to head or body for entire site or specific pages/posts</p>
+                        <label>
+                            <input type="checkbox" name="custom_scripts" value="1" <?php checked(!empty($modules['custom_scripts'])); ?>>
+                            Enable Custom Scripts Manager
+                        </label>
+                    </div>
+                    
+                    <div class="wpsa-module-card">
+                        <h3>📧 SMTP Mailer</h3>
+                        <p>Professional SMTP plugin with custom SMTP server settings for reliable email delivery</p>
+                        <label>
+                            <input type="checkbox" name="smtp_mailer" value="1" <?php checked(!empty($modules['smtp_mailer'])); ?>>
+                            Enable SMTP Mailer
+                        </label>
+                    </div>
+                    
+                    <div class="wpsa-module-card">
+                        <h3>🖼️ Image Optimizer</h3>
+                        <p>Converts uploaded images to WebP format automatically with customizable compression</p>
+                        <label>
+                            <input type="checkbox" name="image_optimizer" value="1" <?php checked(!empty($modules['image_optimizer'])); ?>>
+                            Enable Image Optimizer
+                        </label>
+                    </div>
+                    
+                    <div class="wpsa-module-card">
+                        <h3>🔐 Email 2FA</h3>
+                        <p>Adds two-factor authentication using email OTP codes for enhanced login security</p>
+                        <label>
+                            <input type="checkbox" name="email_2fa" value="1" <?php checked(!empty($modules['email_2fa'])); ?>>
+                            Enable Email 2FA
+                        </label>
                     </div>
                 </div>
                 
-                <div class="wpsa-module-card <?php echo !empty($enabled_modules['smtp_mailer']) ? 'enabled' : 'disabled'; ?>">
-                    <div class="wpsa-module-icon">📧</div>
-                    <h3><?php _e('SMTP Mailer', 'wp-starter-addon'); ?></h3>
-                    <p><?php _e('Professional SMTP plugin with custom server settings for reliable email delivery', 'wp-starter-addon'); ?></p>
-                    <div class="wpsa-module-actions">
-                        <?php if (!empty($enabled_modules['smtp_mailer'])): ?>
-                            <a href="<?php echo admin_url('admin.php?page=wpsa-smtp-settings'); ?>" class="button button-primary"><?php _e('Configure', 'wp-starter-addon'); ?></a>
-                        <?php else: ?>
-                            <span class="wpsa-disabled-text"><?php _e('Module Disabled', 'wp-starter-addon'); ?></span>
-                        <?php endif; ?>
-                    </div>
-                </div>
-                
-                <div class="wpsa-module-card <?php echo !empty($enabled_modules['image_optimizer']) ? 'enabled' : 'disabled'; ?>">
-                    <div class="wpsa-module-icon">🖼️</div>
-                    <h3><?php _e('Image Optimizer', 'wp-starter-addon'); ?></h3>
-                    <p><?php _e('Converts uploaded images to WebP format automatically with customizable compression', 'wp-starter-addon'); ?></p>
-                    <div class="wpsa-module-actions">
-                        <?php if (!empty($enabled_modules['image_optimizer'])): ?>
-                            <a href="<?php echo admin_url('admin.php?page=wpsa-image-optimizer'); ?>" class="button button-primary"><?php _e('Configure', 'wp-starter-addon'); ?></a>
-                        <?php else: ?>
-                            <span class="wpsa-disabled-text"><?php _e('Module Disabled', 'wp-starter-addon'); ?></span>
-                        <?php endif; ?>
-                    </div>
-                </div>
-                
-                <div class="wpsa-module-card <?php echo !empty($enabled_modules['email_2fa']) ? 'enabled' : 'disabled'; ?>">
-                    <div class="wpsa-module-icon">🔐</div>
-                    <h3><?php _e('Email 2FA', 'wp-starter-addon'); ?></h3>
-                    <p><?php _e('Adds two-factor authentication using email OTP codes for WordPress login security', 'wp-starter-addon'); ?></p>
-                    <div class="wpsa-module-actions">
-                        <?php if (!empty($enabled_modules['email_2fa'])): ?>
-                            <a href="<?php echo admin_url('admin.php?page=wpsa-email-2fa'); ?>" class="button button-primary"><?php _e('Configure', 'wp-starter-addon'); ?></a>
-                        <?php else: ?>
-                            <span class="wpsa-disabled-text"><?php _e('Module Disabled', 'wp-starter-addon'); ?></span>
-                        <?php endif; ?>
-                    </div>
-                </div>
-            </div>
+                <?php submit_button('Save Module Settings'); ?>
+            </form>
             
-            <div class="wpsa-quick-actions">
-                <h2><?php _e('Quick Actions', 'wp-starter-addon'); ?></h2>
-                <a href="<?php echo admin_url('admin.php?page=wpsa-module-settings'); ?>" class="button button-secondary"><?php _e('Enable/Disable Modules', 'wp-starter-addon'); ?></a>
-            </div>
-            
-            <div class="wpsa-info-box">
-                <h3><?php _e('About WP Starter Addon', 'wp-starter-addon'); ?></h3>
-                <p><?php _e('This comprehensive WordPress toolkit combines four essential plugins into one powerful solution. Each module can be enabled or disabled independently based on your needs.', 'wp-starter-addon'); ?></p>
-                <p><strong><?php _e('Version:', 'wp-starter-addon'); ?></strong> <?php echo WPSA_VERSION; ?></p>
-                <p><strong><?php _e('Author:', 'wp-starter-addon'); ?></strong> <a href="https://twitter.com/drshounakpal" target="_blank">TechWeirdo</a></p>
+            <div class="wpsa-info-section">
+                <h2>📋 Plugin Information</h2>
+                <p><strong>Version:</strong> <?php echo WPSA_VERSION; ?></p>
+                <p><strong>Author:</strong> <a href="https://twitter.com/drshounakpal" target="_blank">TechWeirdo</a></p>
+                <p><strong>Support:</strong> <a href="https://github.com/drshounak/wordpress-plugins" target="_blank">GitHub Repository</a></p>
             </div>
         </div>
         
         <style>
-        .wpsa-dashboard-grid {
+        .wpsa-modules-grid {
             display: grid;
             grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
             gap: 20px;
             margin: 20px 0;
         }
-        
         .wpsa-module-card {
             background: #fff;
             border: 1px solid #ccd0d4;
-            border-radius: 8px;
+            border-radius: 4px;
             padding: 20px;
-            text-align: center;
-            transition: all 0.3s ease;
+            box-shadow: 0 1px 1px rgba(0,0,0,.04);
         }
-        
-        .wpsa-module-card.enabled {
-            border-color: #00a32a;
-            box-shadow: 0 2px 8px rgba(0, 163, 42, 0.1);
+        .wpsa-module-card h3 {
+            margin-top: 0;
+            color: #23282d;
         }
-        
-        .wpsa-module-card.disabled {
-            opacity: 0.6;
-            background: #f6f7f7;
-        }
-        
-        .wpsa-module-icon {
-            font-size: 48px;
+        .wpsa-module-card p {
+            color: #666;
             margin-bottom: 15px;
         }
-        
-        .wpsa-module-card h3 {
-            margin: 0 0 10px 0;
-            color: #1d2327;
+        .wpsa-module-card label {
+            font-weight: 600;
+            color: #0073aa;
         }
-        
-        .wpsa-module-card p {
-            color: #646970;
-            margin-bottom: 20px;
-            line-height: 1.5;
-        }
-        
-        .wpsa-disabled-text {
-            color: #d63638;
-            font-weight: 500;
-        }
-        
-        .wpsa-quick-actions {
-            margin: 30px 0;
-            padding: 20px;
-            background: #f0f6fc;
-            border: 1px solid #c3c4c7;
+        .wpsa-info-section {
+            background: #f9f9f9;
+            border: 1px solid #e5e5e5;
             border-radius: 4px;
-        }
-        
-        .wpsa-info-box {
-            margin: 30px 0;
             padding: 20px;
-            background: #fff;
-            border: 1px solid #c3c4c7;
-            border-radius: 4px;
+            margin-top: 30px;
         }
         </style>
         <?php
     }
     
-    /**
-     * Module settings page
-     */
-    public function module_settings_page() {
-        if (isset($_POST['submit'])) {
-            check_admin_referer('wpsa_module_settings');
-            
-            $modules = array(
-                'custom_scripts' => isset($_POST['custom_scripts']),
-                'smtp_mailer' => isset($_POST['smtp_mailer']),
-                'image_optimizer' => isset($_POST['image_optimizer']),
-                'email_2fa' => isset($_POST['email_2fa'])
-            );
-            
-            update_option('wpsa_modules', $modules);
-            
-            echo '<div class="notice notice-success"><p>' . __('Module settings saved successfully!', 'wp-starter-addon') . '</p></div>';
-            
-            // Reload modules
-            $this->load_modules();
-        }
-        
-        $enabled_modules = get_option('wpsa_modules', array());
-        ?>
-        <div class="wrap">
-            <h1><?php _e('Module Settings', 'wp-starter-addon'); ?></h1>
-            <p><?php _e('Enable or disable individual modules based on your needs. Disabled modules will not load, improving performance.', 'wp-starter-addon'); ?></p>
-            
-            <form method="post" action="">
-                <?php wp_nonce_field('wpsa_module_settings'); ?>
-                
-                <table class="form-table">
-                    <tr>
-                        <th scope="row"><?php _e('Custom Scripts Manager', 'wp-starter-addon'); ?></th>
-                        <td>
-                            <label>
-                                <input type="checkbox" name="custom_scripts" value="1" <?php checked(!empty($enabled_modules['custom_scripts'])); ?>>
-                                <?php _e('Enable Custom Scripts Manager', 'wp-starter-addon'); ?>
-                            </label>
-                            <p class="description"><?php _e('Add custom scripts to head or body for entire site or specific pages/posts', 'wp-starter-addon'); ?></p>
-                        </td>
-                    </tr>
-                    
-                    <tr>
-                        <th scope="row"><?php _e('SMTP Mailer', 'wp-starter-addon'); ?></th>
-                        <td>
-                            <label>
-                                <input type="checkbox" name="smtp_mailer" value="1" <?php checked(!empty($enabled_modules['smtp_mailer'])); ?>>
-                                <?php _e('Enable SMTP Mailer', 'wp-starter-addon'); ?>
-                            </label>
-                            <p class="description"><?php _e('Professional SMTP plugin with custom server settings for reliable email delivery', 'wp-starter-addon'); ?></p>
-                        </td>
-                    </tr>
-                    
-                    <tr>
-                        <th scope="row"><?php _e('Image Optimizer', 'wp-starter-addon'); ?></th>
-                        <td>
-                            <label>
-                                <input type="checkbox" name="image_optimizer" value="1" <?php checked(!empty($enabled_modules['image_optimizer'])); ?>>
-                                <?php _e('Enable Image Optimizer', 'wp-starter-addon'); ?>
-                            </label>
-                            <p class="description"><?php _e('Converts uploaded images to WebP format automatically with customizable compression', 'wp-starter-addon'); ?></p>
-                        </td>
-                    </tr>
-                    
-                    <tr>
-                        <th scope="row"><?php _e('Email 2FA', 'wp-starter-addon'); ?></th>
-                        <td>
-                            <label>
-                                <input type="checkbox" name="email_2fa" value="1" <?php checked(!empty($enabled_modules['email_2fa'])); ?>>
-                                <?php _e('Enable Email 2FA', 'wp-starter-addon'); ?>
-                            </label>
-                            <p class="description"><?php _e('Adds two-factor authentication using email OTP codes for WordPress login security', 'wp-starter-addon'); ?></p>
-                        </td>
-                    </tr>
-                </table>
-                
-                <?php submit_button(); ?>
-            </form>
-        </div>
-        <?php
-    }
-    
-    /**
-     * Custom Scripts page
-     */
     public function custom_scripts_page() {
-        if (isset($this->modules['custom_scripts'])) {
-            $this->modules['custom_scripts']->admin_page();
-        }
+        $scripts_manager = new WPSA_CustomScriptsManager();
+        $scripts_manager->admin_page();
     }
     
-    /**
-     * SMTP Settings page
-     */
-    public function smtp_settings_page() {
-        if (isset($this->modules['smtp_mailer'])) {
-            $this->modules['smtp_mailer']->admin_page();
-        }
+    public function smtp_mailer_page() {
+        $smtp_mailer = new WPSA_SMTPMailer();
+        $smtp_mailer->admin_page();
     }
     
-    /**
-     * Image Optimizer page
-     */
     public function image_optimizer_page() {
-        if (isset($this->modules['image_optimizer'])) {
-            $this->modules['image_optimizer']->options_page();
-        }
+        $image_optimizer = new WPSA_ImageOptimizer();
+        $image_optimizer->options_page();
     }
     
-    /**
-     * Email 2FA page
-     */
     public function email_2fa_page() {
-        if (isset($this->modules['email_2fa'])) {
-            $this->modules['email_2fa']->admin_page();
-        }
+        $email_2fa = new WPSA_Email2FA();
+        $email_2fa->admin_page();
     }
 }
 
 /**
- * Custom Scripts Module
+ * Custom Scripts Manager Module
  */
-class WPSA_CustomScripts {
+class WPSA_CustomScriptsManager {
     
     public function __construct() {
         add_action('wp_head', array($this, 'output_head_scripts'), 999);
@@ -537,7 +339,7 @@ class WPSA_CustomScripts {
         $post_types = get_post_types(array('public' => true), 'names');
         foreach ($post_types as $post_type) {
             add_meta_box(
-                'wpsa-custom-scripts-meta-box',
+                'custom-scripts-meta-box',
                 'Custom Scripts',
                 array($this, 'meta_box_callback'),
                 $post_type,
@@ -548,34 +350,26 @@ class WPSA_CustomScripts {
     }
     
     public function meta_box_callback($post) {
-        wp_nonce_field('wpsa_custom_scripts_meta_box_action', 'wpsa_custom_scripts_meta_box_nonce');
+        wp_nonce_field('custom_scripts_meta_box_action', 'custom_scripts_meta_box_nonce');
         
-        $head_scripts = get_post_meta($post->ID, '_wpsa_csm_head_scripts', true);
-        $body_scripts = get_post_meta($post->ID, '_wpsa_csm_body_scripts', true);
-        
-        // Check for old meta keys for backward compatibility
-        if (empty($head_scripts)) {
-            $head_scripts = get_post_meta($post->ID, '_csm_head_scripts', true);
-        }
-        if (empty($body_scripts)) {
-            $body_scripts = get_post_meta($post->ID, '_csm_body_scripts', true);
-        }
+        $head_scripts = get_post_meta($post->ID, '_csm_head_scripts', true);
+        $body_scripts = get_post_meta($post->ID, '_csm_body_scripts', true);
         
         ?>
         <style>
-            .wpsa-textarea { width: 100%; height: 120px; font-family: monospace; }
-            .wpsa-section { margin: 15px 0; }
-            .wpsa-label { font-weight: bold; margin-bottom: 5px; display: block; }
+            .csm-textarea { width: 100%; height: 120px; font-family: monospace; }
+            .csm-section { margin: 15px 0; }
+            .csm-label { font-weight: bold; margin-bottom: 5px; display: block; }
         </style>
         
-        <div class="wpsa-section">
-            <label class="wpsa-label">Head Scripts (before &lt;/head&gt;)</label>
-            <textarea name="wpsa_csm_head_scripts" class="wpsa-textarea" placeholder="Enter scripts to be added in the head section..."><?php echo esc_textarea($head_scripts); ?></textarea>
+        <div class="csm-section">
+            <label class="csm-label">Head Scripts (before &lt;/head&gt;)</label>
+            <textarea name="csm_head_scripts" class="csm-textarea" placeholder="Enter scripts to be added in the head section..."><?php echo esc_textarea($head_scripts); ?></textarea>
         </div>
         
-        <div class="wpsa-section">
-            <label class="wpsa-label">Body Scripts (before &lt;/body&gt;)</label>
-            <textarea name="wpsa_csm_body_scripts" class="wpsa-textarea" placeholder="Enter scripts to be added before closing body tag..."><?php echo esc_textarea($body_scripts); ?></textarea>
+        <div class="csm-section">
+            <label class="csm-label">Body Scripts (before &lt;/body&gt;)</label>
+            <textarea name="csm_body_scripts" class="csm-textarea" placeholder="Enter scripts to be added before closing body tag..."><?php echo esc_textarea($body_scripts); ?></textarea>
         </div>
         
         <p><small><strong>Note:</strong> These scripts will only apply to this specific post/page. For site-wide scripts, use the <a href="<?php echo admin_url('admin.php?page=wpsa-custom-scripts'); ?>">Custom Scripts settings page</a>.</small></p>
@@ -583,8 +377,8 @@ class WPSA_CustomScripts {
     }
     
     public function save_post_scripts($post_id) {
-        if (!isset($_POST['wpsa_custom_scripts_meta_box_nonce']) || 
-            !wp_verify_nonce($_POST['wpsa_custom_scripts_meta_box_nonce'], 'wpsa_custom_scripts_meta_box_action')) {
+        if (!isset($_POST['custom_scripts_meta_box_nonce']) || 
+            !wp_verify_nonce($_POST['custom_scripts_meta_box_nonce'], 'custom_scripts_meta_box_action')) {
             return;
         }
         
@@ -596,112 +390,76 @@ class WPSA_CustomScripts {
             return;
         }
         
-        if (isset($_POST['wpsa_csm_head_scripts'])) {
-            $head_scripts = wp_unslash($_POST['wpsa_csm_head_scripts']);
-            update_post_meta($post_id, '_wpsa_csm_head_scripts', $head_scripts);
+        if (isset($_POST['csm_head_scripts'])) {
+            $head_scripts = wp_unslash($_POST['csm_head_scripts']);
+            update_post_meta($post_id, '_csm_head_scripts', $head_scripts);
         } else {
-            delete_post_meta($post_id, '_wpsa_csm_head_scripts');
+            delete_post_meta($post_id, '_csm_head_scripts');
         }
         
-        if (isset($_POST['wpsa_csm_body_scripts'])) {
-            $body_scripts = wp_unslash($_POST['wpsa_csm_body_scripts']);
-            update_post_meta($post_id, '_wpsa_csm_body_scripts', $body_scripts);
+        if (isset($_POST['csm_body_scripts'])) {
+            $body_scripts = wp_unslash($_POST['csm_body_scripts']);
+            update_post_meta($post_id, '_csm_body_scripts', $body_scripts);
         } else {
-            delete_post_meta($post_id, '_wpsa_csm_body_scripts');
+            delete_post_meta($post_id, '_csm_body_scripts');
         }
     }
     
     public function output_head_scripts() {
-        // Global head scripts
-        $global_head_scripts = get_option('wpsa_csm_global_head_scripts', '');
-        
-        // Check old option for backward compatibility
-        if (empty($global_head_scripts)) {
-            $global_head_scripts = get_option('csm_global_head_scripts', '');
-        }
-        
+        $global_head_scripts = get_option('csm_global_head_scripts', '');
         if (!empty(trim($global_head_scripts))) {
-            echo "\n<!-- WP Starter Addon - Global Head Scripts -->\n";
+            echo "\n<!-- WP Starter Addon - Custom Scripts Manager - Global Head -->\n";
             echo $global_head_scripts . "\n";
-            echo "<!-- End WP Starter Addon - Global Head Scripts -->\n";
+            echo "<!-- End WP Starter Addon - Custom Scripts Manager - Global Head -->\n";
         }
         
-        // Page-specific head scripts
         if (is_singular()) {
             global $post;
             if ($post) {
-                $post_head_scripts = get_post_meta($post->ID, '_wpsa_csm_head_scripts', true);
-                
-                // Check old meta key for backward compatibility
-                if (empty($post_head_scripts)) {
-                    $post_head_scripts = get_post_meta($post->ID, '_csm_head_scripts', true);
-                }
-                
+                $post_head_scripts = get_post_meta($post->ID, '_csm_head_scripts', true);
                 if (!empty(trim($post_head_scripts))) {
-                    echo "\n<!-- WP Starter Addon - Page Specific Head Scripts -->\n";
+                    echo "\n<!-- WP Starter Addon - Custom Scripts Manager - Page Specific Head -->\n";
                     echo $post_head_scripts . "\n";
-                    echo "<!-- End WP Starter Addon - Page Specific Head Scripts -->\n";
+                    echo "<!-- End WP Starter Addon - Custom Scripts Manager - Page Specific Head -->\n";
                 }
             }
         }
     }
     
     public function output_body_scripts() {
-        // Global body scripts
-        $global_body_scripts = get_option('wpsa_csm_global_body_scripts', '');
-        
-        // Check old option for backward compatibility
-        if (empty($global_body_scripts)) {
-            $global_body_scripts = get_option('csm_global_body_scripts', '');
-        }
-        
+        $global_body_scripts = get_option('csm_global_body_scripts', '');
         if (!empty(trim($global_body_scripts))) {
-            echo "\n<!-- WP Starter Addon - Global Body Scripts -->\n";
+            echo "\n<!-- WP Starter Addon - Custom Scripts Manager - Global Body -->\n";
             echo $global_body_scripts . "\n";
-            echo "<!-- End WP Starter Addon - Global Body Scripts -->\n";
+            echo "<!-- End WP Starter Addon - Custom Scripts Manager - Global Body -->\n";
         }
         
-        // Page-specific body scripts
         if (is_singular()) {
             global $post;
             if ($post) {
-                $post_body_scripts = get_post_meta($post->ID, '_wpsa_csm_body_scripts', true);
-                
-                // Check old meta key for backward compatibility
-                if (empty($post_body_scripts)) {
-                    $post_body_scripts = get_post_meta($post->ID, '_csm_body_scripts', true);
-                }
-                
+                $post_body_scripts = get_post_meta($post->ID, '_csm_body_scripts', true);
                 if (!empty(trim($post_body_scripts))) {
-                    echo "\n<!-- WP Starter Addon - Page Specific Body Scripts -->\n";
+                    echo "\n<!-- WP Starter Addon - Custom Scripts Manager - Page Specific Body -->\n";
                     echo $post_body_scripts . "\n";
-                    echo "<!-- End WP Starter Addon - Page Specific Body Scripts -->\n";
+                    echo "<!-- End WP Starter Addon - Custom Scripts Manager - Page Specific Body -->\n";
                 }
             }
         }
     }
     
     public function admin_page() {
-        if (isset($_POST['submit']) && check_admin_referer('wpsa_csm_settings_action', 'wpsa_csm_settings_nonce')) {
-            $head_scripts = isset($_POST['wpsa_csm_global_head_scripts']) ? wp_unslash($_POST['wpsa_csm_global_head_scripts']) : '';
-            $body_scripts = isset($_POST['wpsa_csm_global_body_scripts']) ? wp_unslash($_POST['wpsa_csm_global_body_scripts']) : '';
+        if (isset($_POST['submit']) && check_admin_referer('csm_settings_action', 'csm_settings_nonce')) {
+            $head_scripts = isset($_POST['csm_global_head_scripts']) ? wp_unslash($_POST['csm_global_head_scripts']) : '';
+            $body_scripts = isset($_POST['csm_global_body_scripts']) ? wp_unslash($_POST['csm_global_body_scripts']) : '';
             
-            update_option('wpsa_csm_global_head_scripts', $head_scripts);
-            update_option('wpsa_csm_global_body_scripts', $body_scripts);
+            update_option('csm_global_head_scripts', $head_scripts);
+            update_option('csm_global_body_scripts', $body_scripts);
             
             echo '<div class="notice notice-success is-dismissible"><p><strong>Settings saved successfully!</strong></p></div>';
         }
         
-        // Get current values with backward compatibility
-        $global_head_scripts = get_option('wpsa_csm_global_head_scripts', '');
-        if (empty($global_head_scripts)) {
-            $global_head_scripts = get_option('csm_global_head_scripts', '');
-        }
-        
-        $global_body_scripts = get_option('wpsa_csm_global_body_scripts', '');
-        if (empty($global_body_scripts)) {
-            $global_body_scripts = get_option('csm_global_body_scripts', '');
-        }
+        $global_head_scripts = get_option('csm_global_head_scripts', '');
+        $global_body_scripts = get_option('csm_global_body_scripts', '');
         
         ?>
         <div class="wrap">
@@ -709,26 +467,26 @@ class WPSA_CustomScripts {
             <p>Add custom scripts to your entire website or specific pages/posts. Scripts can be added to the head section or before the closing body tag.</p>
             
             <form method="post" action="">
-                <?php wp_nonce_field('wpsa_csm_settings_action', 'wpsa_csm_settings_nonce'); ?>
+                <?php wp_nonce_field('csm_settings_action', 'csm_settings_nonce'); ?>
                 
                 <table class="form-table" role="presentation">
                     <tbody>
                         <tr>
                             <th scope="row">
-                                <label for="wpsa_csm_global_head_scripts">Global Head Scripts</label>
+                                <label for="csm_global_head_scripts">Global Head Scripts</label>
                             </th>
                             <td>
-                                <textarea name="wpsa_csm_global_head_scripts" id="wpsa_csm_global_head_scripts" rows="10" cols="80" class="large-text code"><?php echo esc_textarea($global_head_scripts); ?></textarea>
+                                <textarea name="csm_global_head_scripts" id="csm_global_head_scripts" rows="10" cols="80" class="large-text code"><?php echo esc_textarea($global_head_scripts); ?></textarea>
                                 <p class="description">These scripts will be added to the &lt;head&gt; section of every page (analytics, fonts, meta tags, etc.)</p>
                             </td>
                         </tr>
                         
                         <tr>
                             <th scope="row">
-                                <label for="wpsa_csm_global_body_scripts">Global Body Scripts</label>
+                                <label for="csm_global_body_scripts">Global Body Scripts</label>
                             </th>
                             <td>
-                                <textarea name="wpsa_csm_global_body_scripts" id="wpsa_csm_global_body_scripts" rows="10" cols="80" class="large-text code"><?php echo esc_textarea($global_body_scripts); ?></textarea>
+                                <textarea name="csm_global_body_scripts" id="csm_global_body_scripts" rows="10" cols="80" class="large-text code"><?php echo esc_textarea($global_body_scripts); ?></textarea>
                                 <p class="description">These scripts will be added before the closing &lt;/body&gt; tag of every page (tracking, chat widgets, etc.)</p>
                             </td>
                         </tr>
@@ -755,11 +513,6 @@ class WPSA_CustomScripts {
                 <p><strong>Global Head Scripts:</strong> <?php echo empty($global_head_scripts) ? '<span style="color: #d1242f;">Empty</span>' : '<span style="color: #0f5132;">Active (' . strlen($global_head_scripts) . ' characters)</span>'; ?></p>
                 <p><strong>Global Body Scripts:</strong> <?php echo empty($global_body_scripts) ? '<span style="color: #d1242f;">Empty</span>' : '<span style="color: #0f5132;">Active (' . strlen($global_body_scripts) . ' characters)</span>'; ?></p>
             </div>
-            
-            <hr>
-            
-            <h2>Page/Post Specific Scripts</h2>
-            <p>To add scripts to specific pages or posts, edit the page/post and look for the "Custom Scripts" meta box.</p>
         </div>
         
         <script>
@@ -781,54 +534,12 @@ class WPSA_SMTPMailer {
 
     public function __construct() {
         add_action('init', array($this, 'init'));
-        add_action('admin_init', array($this, 'admin_init'));
         add_action('phpmailer_init', array($this, 'configure_phpmailer'));
-        add_action('wp_ajax_wpsa_test_email', array($this, 'test_email'));
+        add_action('wp_ajax_ssm_test_email', array($this, 'test_email'));
     }
 
     public function init() {
-        $this->options = get_option('wpsa_smtp_settings', array());
-        
-        // Check for old settings for backward compatibility
-        if (empty($this->options)) {
-            $old_settings = get_option('ssm_settings', array());
-            if (!empty($old_settings)) {
-                $this->options = $old_settings;
-                update_option('wpsa_smtp_settings', $old_settings);
-            }
-        }
-        
-        // Set defaults if still empty
-        if (empty($this->options)) {
-            $this->options = array(
-                'smtp_host'      => '',
-                'smtp_port'      => '587',
-                'smtp_encryption'=> 'tls',
-                'smtp_auth'      => 1,
-                'smtp_username'  => '',
-                'smtp_password'  => '',
-                'from_email'     => get_option('admin_email'),
-                'from_name'      => get_option('blogname'),
-                'debug_mode'     => 0,
-            );
-        }
-    }
-
-    public function admin_init() {
-        register_setting('wpsa_smtp_settings_group', 'wpsa_smtp_settings', array($this, 'sanitize_settings'));
-    }
-
-    public function sanitize_settings($input) {
-        $sanitized = array();
-        $sanitized['smtp_host']       = sanitize_text_field($input['smtp_host']);
-        $sanitized['smtp_port']       = intval($input['smtp_port']);
-        $sanitized['smtp_encryption'] = sanitize_text_field($input['smtp_encryption']);
-        $sanitized['smtp_username']   = sanitize_text_field($input['smtp_username']);
-        $sanitized['smtp_password']   = $input['smtp_password'];
-        $sanitized['from_email']      = sanitize_email($input['from_email']);
-        $sanitized['from_name']       = sanitize_text_field($input['from_name']);
-        $sanitized['debug_mode']      = isset($input['debug_mode']) ? 1 : 0;
-        return $sanitized;
+        $this->options = get_option('ssm_settings', array());
     }
 
     public function configure_phpmailer($phpmailer) {
@@ -837,12 +548,12 @@ class WPSA_SMTPMailer {
         }
         
         $phpmailer->isSMTP();
-        $phpmailer->Host       = $this->options['smtp_host'];
-        $phpmailer->SMTPAuth   = true;
-        $phpmailer->Port       = $this->options['smtp_port'];
+        $phpmailer->Host = $this->options['smtp_host'];
+        $phpmailer->SMTPAuth = true;
+        $phpmailer->Port = $this->options['smtp_port'];
         $phpmailer->SMTPSecure = $this->options['smtp_encryption'];
-        $phpmailer->Username   = $this->options['smtp_username'];
-        $phpmailer->Password   = $this->options['smtp_password'];
+        $phpmailer->Username = $this->options['smtp_username'];
+        $phpmailer->Password = $this->options['smtp_password'];
         $phpmailer->setFrom(
             $this->options['from_email'],
             $this->options['from_name']
@@ -853,14 +564,14 @@ class WPSA_SMTPMailer {
     }
 
     public function test_email() {
-        check_ajax_referer('wpsa_test_email', 'nonce');
+        check_ajax_referer('ssm_test_email', 'nonce');
         if (!current_user_can('manage_options')) {
             wp_die('Unauthorized');
         }
-        $to      = sanitize_email($_POST['test_email']);
+        $to = sanitize_email($_POST['test_email']);
         $subject = 'Test Email from WP Starter Addon SMTP Mailer';
         $message = 'This is a test email to verify your SMTP configuration.';
-        $result  = wp_mail($to, $subject, $message);
+        $result = wp_mail($to, $subject, $message);
         if ($result) {
             wp_send_json_success('Test email sent successfully!');
         } else {
@@ -870,54 +581,62 @@ class WPSA_SMTPMailer {
 
     public function admin_page() {
         if (isset($_POST['submit'])) {
-            check_admin_referer('wpsa_smtp_settings_group-options');
+            check_admin_referer('ssm_settings_action', 'ssm_settings_nonce');
             
-            $settings = $this->sanitize_settings($_POST['wpsa_smtp_settings']);
-            update_option('wpsa_smtp_settings', $settings);
+            $settings = array(
+                'smtp_host' => sanitize_text_field($_POST['smtp_host']),
+                'smtp_port' => intval($_POST['smtp_port']),
+                'smtp_encryption' => sanitize_text_field($_POST['smtp_encryption']),
+                'smtp_username' => sanitize_text_field($_POST['smtp_username']),
+                'smtp_password' => $_POST['smtp_password'],
+                'from_email' => sanitize_email($_POST['from_email']),
+                'from_name' => sanitize_text_field($_POST['from_name']),
+                'debug_mode' => isset($_POST['debug_mode']) ? 1 : 0,
+            );
+            
+            update_option('ssm_settings', $settings);
             $this->options = $settings;
             
             echo '<div class="notice notice-success"><p>SMTP settings saved successfully!</p></div>';
         }
+        
         ?>
         <div class="wrap">
             <h1>SMTP Mailer Settings</h1>
+            <p>Configure your SMTP server settings for reliable email delivery.</p>
+            
             <form method="post" action="">
-                <?php settings_fields('wpsa_smtp_settings_group'); ?>
+                <?php wp_nonce_field('ssm_settings_action', 'ssm_settings_nonce'); ?>
                 
-                <h2>General Settings</h2>
                 <table class="form-table">
                     <tr>
                         <th scope="row">From Email</th>
                         <td>
-                            <input type="email" name="wpsa_smtp_settings[from_email]" value="<?php echo esc_attr($this->options['from_email'] ?? get_option('admin_email')); ?>" class="regular-text" required />
+                            <input type="email" name="from_email" value="<?php echo esc_attr($this->options['from_email'] ?? get_option('admin_email')); ?>" class="regular-text" required />
                         </td>
                     </tr>
                     <tr>
                         <th scope="row">From Name</th>
                         <td>
-                            <input type="text" name="wpsa_smtp_settings[from_name]" value="<?php echo esc_attr($this->options['from_name'] ?? get_option('blogname')); ?>" class="regular-text" />
+                            <input type="text" name="from_name" value="<?php echo esc_attr($this->options['from_name'] ?? get_option('blogname')); ?>" class="regular-text" />
                         </td>
                     </tr>
-                </table>
-                
-                <h2>SMTP Settings</h2>
-                <table class="form-table">
                     <tr>
                         <th scope="row">SMTP Host</th>
                         <td>
-                            <input type="text" name="wpsa_smtp_settings[smtp_host]" value="<?php echo esc_attr($this->options['smtp_host'] ?? ''); ?>" class="regular-text" required />
+                            <input type="text" name="smtp_host" value="<?php echo esc_attr($this->options['smtp_host'] ?? ''); ?>" class="regular-text" required />
                         </td>
                     </tr>
                     <tr>
                         <th scope="row">SMTP Port</th>
                         <td>
-                            <input type="number" name="wpsa_smtp_settings[smtp_port]" value="<?php echo esc_attr($this->options['smtp_port'] ?? '587'); ?>" class="small-text" required />
+                            <input type="number" name="smtp_port" value="<?php echo esc_attr($this->options['smtp_port'] ?? '587'); ?>" class="small-text" required />
                         </td>
                     </tr>
                     <tr>
                         <th scope="row">Encryption</th>
                         <td>
-                            <select name="wpsa_smtp_settings[smtp_encryption]">
+                            <select name="smtp_encryption">
                                 <option value="none" <?php selected($this->options['smtp_encryption'] ?? 'tls', 'none'); ?>>None</option>
                                 <option value="ssl" <?php selected($this->options['smtp_encryption'] ?? 'tls', 'ssl'); ?>>SSL</option>
                                 <option value="tls" <?php selected($this->options['smtp_encryption'] ?? 'tls', 'tls'); ?>>TLS</option>
@@ -927,20 +646,20 @@ class WPSA_SMTPMailer {
                     <tr>
                         <th scope="row">Username</th>
                         <td>
-                            <input type="text" name="wpsa_smtp_settings[smtp_username]" value="<?php echo esc_attr($this->options['smtp_username'] ?? ''); ?>" class="regular-text" />
+                            <input type="text" name="smtp_username" value="<?php echo esc_attr($this->options['smtp_username'] ?? ''); ?>" class="regular-text" />
                         </td>
                     </tr>
                     <tr>
                         <th scope="row">Password</th>
                         <td>
-                            <input type="password" name="wpsa_smtp_settings[smtp_password]" value="<?php echo esc_attr($this->options['smtp_password'] ?? ''); ?>" class="regular-text" />
+                            <input type="password" name="smtp_password" value="<?php echo esc_attr($this->options['smtp_password'] ?? ''); ?>" class="regular-text" />
                         </td>
                     </tr>
                     <tr>
                         <th scope="row">Debug Mode</th>
                         <td>
                             <label>
-                                <input type="checkbox" name="wpsa_smtp_settings[debug_mode]" value="1" <?php checked(!empty($this->options['debug_mode'])); ?> />
+                                <input type="checkbox" name="debug_mode" <?php checked(!empty($this->options['debug_mode'])); ?> />
                                 Enable debug output
                             </label>
                         </td>
@@ -952,12 +671,13 @@ class WPSA_SMTPMailer {
                 <button type="button" id="send-test-email" class="button button-primary">Send Test Email</button>
                 <div id="test-result" style="margin-top:10px;font-weight:bold;"></div>
                 
-                <?php submit_button(); ?>
+                <?php submit_button('Save SMTP Settings'); ?>
             </form>
         </div>
+        
         <script>
         document.getElementById('send-test-email').addEventListener('click', function() {
-            var email  = document.getElementById('test-email-address').value;
+            var email = document.getElementById('test-email-address').value;
             var result = document.getElementById('test-result');
             if (!email) {
                 result.innerHTML = '<span style="color:red;">Please enter an email address.</span>';
@@ -966,9 +686,9 @@ class WPSA_SMTPMailer {
             this.disabled = true;
             this.textContent = 'Sending...';
             var data = new FormData();
-            data.append('action', 'wpsa_test_email');
+            data.append('action', 'ssm_test_email');
             data.append('test_email', email);
-            data.append('nonce', '<?php echo wp_create_nonce('wpsa_test_email'); ?>');
+            data.append('nonce', '<?php echo wp_create_nonce('ssm_test_email'); ?>');
             fetch(ajaxurl, { method:'POST', body:data })
                 .then(res => res.json())
                 .then(data => {
@@ -999,32 +719,18 @@ class WPSA_ImageOptimizer {
         add_filter('bulk_actions-upload', array($this, 'add_bulk_action'));
         add_filter('handle_bulk_actions-upload', array($this, 'handle_bulk_action'), 10, 3);
         add_filter('media_row_actions', array($this, 'add_media_row_action'), 10, 2);
-        add_action('wp_ajax_wpsa_convert_single_image', array($this, 'ajax_convert_single_image'));
+        add_action('wp_ajax_convert_single_image', array($this, 'ajax_convert_single_image'));
     }
     
     public function init() {
-        $this->options = get_option('wpsa_image_settings', array());
-        
-        // Check for old settings for backward compatibility
-        if (empty($this->options)) {
-            $old_settings = get_option('aic_settings', array());
-            if (!empty($old_settings)) {
-                $this->options = $old_settings;
-                update_option('wpsa_image_settings', $old_settings);
-            }
-        }
-        
-        // Set defaults if still empty
-        if (empty($this->options)) {
-            $this->options = array(
-                'max_width' => 2400,
-                'max_height' => 2400,
-                'output_format' => 'webp',
-                'quality' => 85,
-                'keep_original' => false,
-                'auto_convert' => true
-            );
-        }
+        $this->options = get_option('aic_settings', array(
+            'max_width' => 2400,
+            'max_height' => 2400,
+            'output_format' => 'webp',
+            'quality' => 85,
+            'keep_original' => false,
+            'auto_convert' => true
+        ));
     }
     
     public function process_upload($upload, $context) {
@@ -1227,12 +933,12 @@ class WPSA_ImageOptimizer {
     }
     
     public function add_bulk_action($bulk_actions) {
-        $bulk_actions['wpsa_convert_images'] = 'Convert Images';
+        $bulk_actions['convert_images'] = 'Convert Images';
         return $bulk_actions;
     }
     
     public function handle_bulk_action($redirect_to, $doaction, $post_ids) {
-        if ($doaction !== 'wpsa_convert_images') {
+        if ($doaction !== 'convert_images') {
             return $redirect_to;
         }
         
@@ -1250,13 +956,13 @@ class WPSA_ImageOptimizer {
     
     public function add_media_row_action($actions, $post) {
         if (wp_attachment_is_image($post->ID)) {
-            $actions['wpsa_convert'] = '<a href="#" onclick="wpsaConvertSingleImage(' . $post->ID . '); return false;">Convert Image</a>';
+            $actions['convert'] = '<a href="#" onclick="convertSingleImage(' . $post->ID . '); return false;">Convert Image</a>';
         }
         return $actions;
     }
     
     public function ajax_convert_single_image() {
-        check_ajax_referer('wpsa_convert_single_image', 'nonce');
+        check_ajax_referer('convert_single_image', 'nonce');
         
         $attachment_id = intval($_POST['attachment_id']);
         $file_path = get_attached_file($attachment_id);
@@ -1270,39 +976,42 @@ class WPSA_ImageOptimizer {
     
     public function options_page() {
         if (isset($_POST['submit'])) {
-            check_admin_referer('wpsa_image_settings');
+            check_admin_referer('aic_settings_action', 'aic_settings_nonce');
             
             $settings = array(
                 'max_width' => max(100, min(5000, intval($_POST['max_width']))),
                 'max_height' => max(100, min(5000, intval($_POST['max_height']))),
                 'output_format' => sanitize_text_field($_POST['output_format']),
                 'quality' => max(1, min(100, intval($_POST['quality']))),
-                'keep_original' => isset($_POST['keep_original']),
-                'auto_convert' => isset($_POST['auto_convert'])
+                'keep_original' => isset($_POST['keep_original']) ? true : false,
+                'auto_convert' => isset($_POST['auto_convert']) ? true : false
             );
             
-            update_option('wpsa_image_settings', $settings);
+            update_option('aic_settings', $settings);
             $this->options = $settings;
             
             echo '<div class="notice notice-success"><p>Image optimizer settings saved successfully!</p></div>';
         }
+        
         ?>
         <div class="wrap">
             <h1>Image Optimizer Settings</h1>
+            <p>Configure automatic image optimization and conversion settings.</p>
+            
             <form method="post" action="">
-                <?php wp_nonce_field('wpsa_image_settings'); ?>
+                <?php wp_nonce_field('aic_settings_action', 'aic_settings_nonce'); ?>
                 
                 <table class="form-table">
                     <tr>
                         <th scope="row">Max Width (px)</th>
                         <td>
-                            <input type="number" name="max_width" value="<?php echo esc_attr($this->options['max_width']); ?>" min="100" max="5000" />
+                            <input type="number" name="max_width" value="<?php echo esc_attr($this->options['max_width']); ?>" min="100" max="5000" class="small-text">
                         </td>
                     </tr>
                     <tr>
                         <th scope="row">Max Height (px)</th>
                         <td>
-                            <input type="number" name="max_height" value="<?php echo esc_attr($this->options['max_height']); ?>" min="100" max="5000" />
+                            <input type="number" name="max_height" value="<?php echo esc_attr($this->options['max_height']); ?>" min="100" max="5000" class="small-text">
                         </td>
                     </tr>
                     <tr>
@@ -1317,14 +1026,14 @@ class WPSA_ImageOptimizer {
                     <tr>
                         <th scope="row">Quality (1-100)</th>
                         <td>
-                            <input type="number" name="quality" value="<?php echo esc_attr($this->options['quality']); ?>" min="1" max="100" />
+                            <input type="number" name="quality" value="<?php echo esc_attr($this->options['quality']); ?>" min="1" max="100" class="small-text">
                         </td>
                     </tr>
                     <tr>
                         <th scope="row">Keep Original Files</th>
                         <td>
                             <label>
-                                <input type="checkbox" name="keep_original" value="1" <?php checked($this->options['keep_original']); ?> />
+                                <input type="checkbox" name="keep_original" <?php checked($this->options['keep_original']); ?>>
                                 Keep original files on server
                             </label>
                         </td>
@@ -1333,112 +1042,19 @@ class WPSA_ImageOptimizer {
                         <th scope="row">Auto Convert on Upload</th>
                         <td>
                             <label>
-                                <input type="checkbox" name="auto_convert" value="1" <?php checked($this->options['auto_convert']); ?> />
+                                <input type="checkbox" name="auto_convert" <?php checked($this->options['auto_convert']); ?>>
                                 Automatically convert images on upload
                             </label>
                         </td>
                     </tr>
                 </table>
                 
-                <?php submit_button(); ?>
+                <?php submit_button('Save Image Optimizer Settings'); ?>
             </form>
             
             <h2>Bulk Convert Existing Images</h2>
             <p>Go to Media Library and use the bulk action "Convert Images" to convert existing images.</p>
-            
-            <div id="wpsa-bulk-convert">
-                <button type="button" id="wpsa-convert-all" class="button button-primary">Convert All Images</button>
-                <div id="wpsa-progress" style="display:none;">
-                    <div id="wpsa-progress-bar" style="width: 100%; background-color: #f0f0f0; border-radius: 3px; margin: 10px 0;">
-                        <div id="wpsa-progress-fill" style="height: 20px; background-color: #0073aa; border-radius: 3px; width: 0%; transition: width 0.3s;"></div>
-                    </div>
-                    <div id="wpsa-progress-text">0% Complete</div>
-                </div>
-            </div>
         </div>
-        
-        <script>
-        function wpsaConvertSingleImage(attachmentId) {
-            if (confirm('Convert this image?')) {
-                jQuery.ajax({
-                    url: ajaxurl,
-                    type: 'POST',
-                    data: {
-                        action: 'wpsa_convert_single_image',
-                        attachment_id: attachmentId,
-                        nonce: '<?php echo wp_create_nonce('wpsa_convert_single_image'); ?>'
-                    },
-                    success: function(response) {
-                        if (response.success) {
-                            alert('Image converted successfully!');
-                            location.reload();
-                        } else {
-                            alert('Failed to convert image: ' + response.data);
-                        }
-                    },
-                    error: function() {
-                        alert('An error occurred while converting the image.');
-                    }
-                });
-            }
-        }
-        
-        jQuery(document).ready(function($) {
-            $('#wpsa-convert-all').click(function() {
-                if (confirm('This will convert all images in your media library. This may take a while. Continue?')) {
-                    convertAllImages();
-                }
-            });
-            
-            function convertAllImages() {
-                $('#wpsa-progress').show();
-                
-                $.ajax({
-                    url: ajaxurl,
-                    type: 'POST',
-                    data: {
-                        action: 'wpsa_get_all_images'
-                    },
-                    success: function(response) {
-                        if (response.success) {
-                            var images = response.data;
-                            var total = images.length;
-                            var converted = 0;
-                            
-                            function convertNext() {
-                                if (converted >= total) {
-                                    alert('All images converted!');
-                                    $('#wpsa-progress').hide();
-                                    return;
-                                }
-                                
-                                var imageId = images[converted];
-                                $.ajax({
-                                    url: ajaxurl,
-                                    type: 'POST',
-                                    data: {
-                                        action: 'wpsa_convert_single_image',
-                                        attachment_id: imageId,
-                                        nonce: '<?php echo wp_create_nonce('wpsa_convert_single_image'); ?>'
-                                    },
-                                    complete: function() {
-                                        converted++;
-                                        var percent = (converted / total) * 100;
-                                        $('#wpsa-progress-fill').css('width', percent + '%');
-                                        $('#wpsa-progress-text').text(Math.round(percent) + '% Complete (' + converted + '/' + total + ')');
-                                        
-                                        setTimeout(convertNext, 100);
-                                    }
-                                });
-                            }
-                            
-                            convertNext();
-                        }
-                    }
-                });
-            }
-        });
-        </script>
         <?php
     }
 }
@@ -1448,10 +1064,9 @@ class WPSA_ImageOptimizer {
  */
 class WPSA_Email2FA {
     
-    private $options;
+    const VERSION = '1.0.0';
     
     public function __construct() {
-        add_action('init', array($this, 'init'));
         add_action('login_init', array($this, 'custom_login_handler'));
         add_action('login_init', array($this, 'add_otp_verification_form'));
         add_action('login_init', array($this, 'handle_resend_otp'));
@@ -1461,41 +1076,6 @@ class WPSA_Email2FA {
         add_action('personal_options_update', array($this, 'save_otp_settings'));
         add_action('edit_user_profile_update', array($this, 'save_otp_settings'));
         add_action('wp_scheduled_delete', array($this, 'cleanup_expired_otp_codes'));
-        
-        // Schedule cleanup if not already scheduled
-        if (!wp_next_scheduled('email_otp_cleanup_event')) {
-            wp_schedule_event(time(), 'daily', 'email_otp_cleanup_event');
-        }
-        add_action('email_otp_cleanup_event', array($this, 'cleanup_expired_otp_codes'));
-    }
-    
-    public function init() {
-        $this->options = get_option('wpsa_otp_settings', array());
-        
-        // Check for old settings for backward compatibility
-        if (empty($this->options)) {
-            $old_enabled = get_option('email_otp_login_enabled', '1');
-            $old_expiry = get_option('email_otp_login_expiry', '10');
-            $old_rate_limit = get_option('email_otp_login_rate_limit', '60');
-            
-            if ($old_enabled !== false) {
-                $this->options = array(
-                    'enabled' => $old_enabled,
-                    'expiry' => $old_expiry,
-                    'rate_limit' => $old_rate_limit
-                );
-                update_option('wpsa_otp_settings', $this->options);
-            }
-        }
-        
-        // Set defaults if still empty
-        if (empty($this->options)) {
-            $this->options = array(
-                'enabled' => '1',
-                'expiry' => '10',
-                'rate_limit' => '60'
-            );
-        }
     }
     
     private function generate_otp_code() {
@@ -1503,31 +1083,31 @@ class WPSA_Email2FA {
     }
     
     private function store_user_otp($user_id, $otp) {
-        $expiry_minutes = $this->options['expiry'];
+        $expiry_minutes = get_option('email_otp_login_expiry', 10);
         $expiry = time() + ($expiry_minutes * 60);
-        update_user_meta($user_id, 'wpsa_login_otp_code', $otp);
-        update_user_meta($user_id, 'wpsa_login_otp_expiry', $expiry);
+        update_user_meta($user_id, 'login_otp_code', $otp);
+        update_user_meta($user_id, 'login_otp_expiry', $expiry);
     }
     
     private function send_otp_email($user) {
         $otp = $this->generate_otp_code();
         $this->store_user_otp($user->ID, $otp);
         
-        $subject = sprintf(__('Your login verification code - %s', 'wp-starter-addon'), get_bloginfo('name'));
+        $subject = sprintf('Your login verification code - %s', get_bloginfo('name'));
         $message = '
         <html>
         <body style="font-family: Arial, sans-serif; color: #333; line-height: 1.6; max-width: 600px; margin: 0 auto; padding: 20px; background-color: #f9f9f9;">
             <div style="background-color: #ffffff; padding: 20px; border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.1);">
-                <h2 style="color: #3498db; margin-top: 0;">' . __('Login Verification Code', 'wp-starter-addon') . '</h2>
-                <p>' . sprintf(__('Hello %s,', 'wp-starter-addon'), esc_html($user->display_name)) . '</p>
-                <p>' . sprintf(__('Your verification code to log in to %s is:', 'wp-starter-addon'), get_bloginfo('name')) . '</p>
+                <h2 style="color: #3498db; margin-top: 0;">Login Verification Code</h2>
+                <p>Hello ' . esc_html($user->display_name) . ',</p>
+                <p>Your verification code to log in to ' . get_bloginfo('name') . ' is:</p>
                 <div style="background: #f2f2f2; padding: 15px; font-size: 24px; text-align: center; letter-spacing: 5px; font-weight: bold; margin: 20px 0;">
                     ' . $otp . '
                 </div>
-                <p>' . sprintf(__('This code will expire in %d minutes.', 'wp-starter-addon'), $this->options['expiry']) . '</p>
-                <p>' . __('If you did not request this code, please ignore this email.', 'wp-starter-addon') . '</p>
+                <p>This code will expire in ' . get_option('email_otp_login_expiry', 10) . ' minutes.</p>
+                <p>If you did not request this code, please ignore this email.</p>
                 <hr style="border: 0; border-top: 1px solid #eee;">
-                <p style="font-size: 12px; color: #777;">' . sprintf(__('This is an automated email from %s.', 'wp-starter-addon'), get_bloginfo('name')) . '</p>
+                <p style="font-size: 12px; color: #777;">This is an automated email from ' . get_bloginfo('name') . '.</p>
             </div>
         </body>
         </html>
@@ -1555,18 +1135,11 @@ class WPSA_Email2FA {
     }
     
     private function is_otp_disabled_for_user($user_id) {
-        $disabled = get_user_meta($user_id, 'wpsa_disable_login_otp', true);
-        
-        // Check old meta key for backward compatibility
-        if (empty($disabled)) {
-            $disabled = get_user_meta($user_id, 'disable_login_otp', true);
-        }
-        
-        return $disabled === '1';
+        return get_user_meta($user_id, 'disable_login_otp', true) === '1';
     }
     
     public function custom_login_handler() {
-        if ($this->options['enabled'] !== '1') {
+        if (get_option('email_otp_login_enabled', '1') !== '1') {
             return;
         }
         
@@ -1598,8 +1171,8 @@ class WPSA_Email2FA {
         
         $this->start_otp_session();
         
-        $_SESSION['wpsa_otp_user_id'] = $user->ID;
-        $_SESSION['wpsa_otp_remember'] = $remember;
+        $_SESSION['otp_user_id'] = $user->ID;
+        $_SESSION['otp_remember'] = $remember;
         
         $this->close_otp_session();
         
@@ -1616,13 +1189,13 @@ class WPSA_Email2FA {
         
         $this->start_otp_session();
         
-        if (!isset($_SESSION['wpsa_otp_user_id'])) {
+        if (!isset($_SESSION['otp_user_id'])) {
             $this->close_otp_session();
             wp_redirect(wp_login_url());
             exit;
         }
         
-        $user = get_user_by('ID', $_SESSION['wpsa_otp_user_id']);
+        $user = get_user_by('ID', $_SESSION['otp_user_id']);
         if (!$user) {
             $this->close_otp_session();
             wp_redirect(wp_login_url());
@@ -1631,27 +1204,17 @@ class WPSA_Email2FA {
         
         if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['otp_code'])) {
             $entered_otp = preg_replace('/[^0-9]/', '', $_POST['otp_code']);
-            $stored_otp = get_user_meta($user->ID, 'wpsa_login_otp_code', true);
-            $expiry = (int) get_user_meta($user->ID, 'wpsa_login_otp_expiry', true);
-            
-            // Check old meta keys for backward compatibility
-            if (empty($stored_otp)) {
-                $stored_otp = get_user_meta($user->ID, 'login_otp_code', true);
-                $expiry = (int) get_user_meta($user->ID, 'login_otp_expiry', true);
-            }
+            $stored_otp = get_user_meta($user->ID, 'login_otp_code', true);
+            $expiry = (int) get_user_meta($user->ID, 'login_otp_expiry', true);
             
             if ($entered_otp === $stored_otp && time() < $expiry) {
-                delete_user_meta($user->ID, 'wpsa_login_otp_code');
-                delete_user_meta($user->ID, 'wpsa_login_otp_expiry');
-                
-                // Clean up old meta keys too
                 delete_user_meta($user->ID, 'login_otp_code');
                 delete_user_meta($user->ID, 'login_otp_expiry');
                 
-                wp_set_auth_cookie($user->ID, $_SESSION['wpsa_otp_remember']);
+                wp_set_auth_cookie($user->ID, $_SESSION['otp_remember']);
                 
-                unset($_SESSION['wpsa_otp_user_id']);
-                unset($_SESSION['wpsa_otp_remember']);
+                unset($_SESSION['otp_user_id']);
+                unset($_SESSION['otp_remember']);
                 $this->close_otp_session();
                 
                 $redirect_to = isset($_REQUEST['redirect_to']) ? $_REQUEST['redirect_to'] : admin_url();
@@ -1659,8 +1222,8 @@ class WPSA_Email2FA {
                 exit;
             } else {
                 $error_message = time() >= $expiry ? 
-                    __('OTP has expired. Please try again.', 'wp-starter-addon') : 
-                    __('Invalid verification code. Please try again.', 'wp-starter-addon');
+                    'OTP has expired. Please try again.' : 
+                    'Invalid verification code. Please try again.';
             }
         }
         
@@ -1677,7 +1240,7 @@ class WPSA_Email2FA {
         <head>
             <meta charset="<?php bloginfo('charset'); ?>">
             <meta name="viewport" content="width=device-width, initial-scale=1">
-            <title><?php printf(__('OTP Verification - %s', 'wp-starter-addon'), get_bloginfo('name')); ?></title>
+            <title>OTP Verification - <?php echo get_bloginfo('name'); ?></title>
             <?php wp_head(); ?>
             <style>
                 body {
@@ -1746,8 +1309,8 @@ class WPSA_Email2FA {
         </head>
         <body>
             <div class="otp-container">
-                <h1><?php _e('Verification Required', 'wp-starter-addon'); ?></h1>
-                <p><?php printf(__('We\'ve sent a verification code to <strong>%s</strong>. Please enter it below to continue.', 'wp-starter-addon'), esc_html(substr_replace($user->user_email, '***', 3, strpos($user->user_email, '@') - 5))); ?></p>
+                <h1>Verification Required</h1>
+                <p>We've sent a verification code to <strong><?php echo esc_html(substr_replace($user->user_email, '***', 3, strpos($user->user_email, '@') - 5)); ?></strong>. Please enter it below to continue.</p>
                 
                 <?php if ($error_message): ?>
                     <div class="error-message"><?php echo esc_html($error_message); ?></div>
@@ -1756,7 +1319,7 @@ class WPSA_Email2FA {
                 <form method="post" action="<?php echo esc_url(add_query_arg('otp_verification', '1', wp_login_url())); ?>">
                     <input type="hidden" name="otp_verification" value="1">
                     <input type="text" name="otp_code" class="otp-field" maxlength="6" placeholder="------" required autofocus>
-                    <button type="submit" class="otp-submit"><?php _e('Verify', 'wp-starter-addon'); ?></button>
+                    <button type="submit" class="otp-submit">Verify</button>
                     
                     <?php if (isset($_REQUEST['redirect_to'])): ?>
                         <input type="hidden" name="redirect_to" value="<?php echo esc_url($_REQUEST['redirect_to']); ?>">
@@ -1764,11 +1327,11 @@ class WPSA_Email2FA {
                 </form>
                 
                 <div class="resend-link">
-                    <a href="<?php echo esc_url(add_query_arg('resend_otp', '1', add_query_arg('otp_verification', '1', wp_login_url()))); ?>"><?php _e('Resend verification code', 'wp-starter-addon'); ?></a>
+                    <a href="<?php echo esc_url(add_query_arg('resend_otp', '1', add_query_arg('otp_verification', '1', wp_login_url()))); ?>">Resend verification code</a>
                 </div>
                 
                 <div class="resend-link">
-                    <a href="<?php echo esc_url(wp_login_url()); ?>"><?php _e('Back to login', 'wp-starter-addon'); ?></a>
+                    <a href="<?php echo esc_url(wp_login_url()); ?>">Back to login</a>
                 </div>
             </div>
             <?php wp_footer(); ?>
@@ -1784,27 +1347,21 @@ class WPSA_Email2FA {
         
         $this->start_otp_session();
         
-        if (!isset($_SESSION['wpsa_otp_user_id'])) {
+        if (!isset($_SESSION['otp_user_id'])) {
             $this->close_otp_session();
             wp_redirect(wp_login_url());
             exit;
         }
         
-        $user = get_user_by('ID', $_SESSION['wpsa_otp_user_id']);
+        $user = get_user_by('ID', $_SESSION['otp_user_id']);
         if (!$user) {
             $this->close_otp_session();
             wp_redirect(wp_login_url());
             exit;
         }
         
-        $rate_limit_seconds = $this->options['rate_limit'];
-        $last_sent = get_user_meta($user->ID, 'wpsa_login_otp_last_sent', true);
-        
-        // Check old meta key for backward compatibility
-        if (empty($last_sent)) {
-            $last_sent = get_user_meta($user->ID, 'login_otp_last_sent', true);
-        }
-        
+        $rate_limit_seconds = get_option('email_otp_login_rate_limit', 60);
+        $last_sent = get_user_meta($user->ID, 'login_otp_last_sent', true);
         if ($last_sent && (time() - $last_sent) < $rate_limit_seconds) {
             $this->close_otp_session();
             wp_redirect(add_query_arg('otp_error', 'rate_limit', add_query_arg('otp_verification', '1', wp_login_url())));
@@ -1814,7 +1371,7 @@ class WPSA_Email2FA {
         $this->close_otp_session();
         
         $this->send_otp_email($user);
-        update_user_meta($user->ID, 'wpsa_login_otp_last_sent', time());
+        update_user_meta($user->ID, 'login_otp_last_sent', time());
         
         wp_redirect(add_query_arg('otp_verification', '1', wp_login_url()));
         exit;
@@ -1822,10 +1379,10 @@ class WPSA_Email2FA {
     
     public function display_otp_error_messages() {
         if (isset($_GET['otp_error']) && $_GET['otp_error'] == 'rate_limit') {
-            $rate_limit_minutes = ceil($this->options['rate_limit'] / 60);
+            $rate_limit_minutes = ceil(get_option('email_otp_login_rate_limit', 60) / 60);
             ?>
             <div id="login_error">
-                <?php printf(__('Please wait at least %d minute(s) before requesting another verification code.', 'wp-starter-addon'), $rate_limit_minutes); ?>
+                Please wait at least <?php echo $rate_limit_minutes; ?> minute(s) before requesting another verification code.
             </div>
             <?php
         }
@@ -1834,15 +1391,8 @@ class WPSA_Email2FA {
     public function cleanup_expired_otp_codes() {
         $users = get_users(array('fields' => 'ID'));
         foreach ($users as $user_id) {
-            $expiry = (int) get_user_meta($user_id, 'wpsa_login_otp_expiry', true);
+            $expiry = (int) get_user_meta($user_id, 'login_otp_expiry', true);
             if ($expiry && time() > $expiry) {
-                delete_user_meta($user_id, 'wpsa_login_otp_code');
-                delete_user_meta($user_id, 'wpsa_login_otp_expiry');
-            }
-            
-            // Clean up old meta keys too
-            $old_expiry = (int) get_user_meta($user_id, 'login_otp_expiry', true);
-            if ($old_expiry && time() > $old_expiry) {
                 delete_user_meta($user_id, 'login_otp_code');
                 delete_user_meta($user_id, 'login_otp_expiry');
             }
@@ -1850,25 +1400,19 @@ class WPSA_Email2FA {
     }
     
     public function otp_settings_fields($user) {
-        $disable_otp = get_user_meta($user->ID, 'wpsa_disable_login_otp', true);
-        
-        // Check old meta key for backward compatibility
-        if (empty($disable_otp)) {
-            $disable_otp = get_user_meta($user->ID, 'disable_login_otp', true);
-        }
-        
+        $disable_otp = get_user_meta($user->ID, 'disable_login_otp', true);
         ?>
-        <h3><?php _e('Login Security', 'wp-starter-addon'); ?></h3>
+        <h3>Login Security</h3>
         <table class="form-table">
             <tr>
-                <th><label for="wpsa_disable_login_otp"><?php _e('Two-Factor Authentication', 'wp-starter-addon'); ?></label></th>
+                <th><label for="disable_login_otp">Two-Factor Authentication</label></th>
                 <td>
-                    <input type="checkbox" name="wpsa_disable_login_otp" id="wpsa_disable_login_otp" value="1" <?php checked($disable_otp, '1'); ?>>
-                    <label for="wpsa_disable_login_otp"><?php _e('Disable email verification code during login', 'wp-starter-addon'); ?></label>
-                    <p class="description"><?php _e('Not recommended. Two-factor authentication adds an extra layer of security to your account.', 'wp-starter-addon'); ?></p>
+                    <input type="checkbox" name="disable_login_otp" id="disable_login_otp" value="1" <?php checked($disable_otp, '1'); ?>>
+                    <label for="disable_login_otp">Disable email verification code during login</label>
+                    <p class="description">Not recommended. Two-factor authentication adds an extra layer of security to your account.</p>
                 </td>
             </tr>
-        </table>
+			</table>
         <?php
     }
     
@@ -1877,73 +1421,189 @@ class WPSA_Email2FA {
             return false;
         }
         
-        $disable_otp = isset($_POST['wpsa_disable_login_otp']) ? '1' : '0';
-        update_user_meta($user_id, 'wpsa_disable_login_otp', $disable_otp);
+        $disable_otp = isset($_POST['disable_login_otp']) ? '1' : '0';
+        update_user_meta($user_id, 'disable_login_otp', $disable_otp);
     }
     
     public function admin_page() {
         if (isset($_POST['submit'])) {
-            check_admin_referer('wpsa_email_2fa_settings');
+            check_admin_referer('email_otp_login_settings');
             
-            $settings = array(
-                'enabled' => isset($_POST['enabled']) ? '1' : '0',
-                'expiry' => max(1, min(60, (int) $_POST['expiry'])),
-                'rate_limit' => max(30, min(300, (int) $_POST['rate_limit']))
-            );
+            update_option('email_otp_login_enabled', isset($_POST['email_otp_login_enabled']) ? '1' : '0');
+            update_option('email_otp_login_expiry', max(1, min(60, (int) $_POST['email_otp_login_expiry'])));
+            update_option('email_otp_login_rate_limit', max(30, min(300, (int) $_POST['email_otp_login_rate_limit'])));
             
-            update_option('wpsa_otp_settings', $settings);
-            $this->options = $settings;
-            
-            echo '<div class="notice notice-success"><p>' . __('Email 2FA settings saved successfully!', 'wp-starter-addon') . '</p></div>';
+            echo '<div class="notice notice-success"><p>Email 2FA settings saved successfully!</p></div>';
         }
+        
+        $enabled = get_option('email_otp_login_enabled', '1');
+        $expiry = get_option('email_otp_login_expiry', 10);
+        $rate_limit = get_option('email_otp_login_rate_limit', 60);
         ?>
         <div class="wrap">
-            <h1><?php _e('Email 2FA Settings', 'wp-starter-addon'); ?></h1>
+            <h1>Email 2FA Settings</h1>
+            <p>Configure two-factor authentication settings for enhanced login security.</p>
             
             <form method="post" action="">
-                <?php wp_nonce_field('wpsa_email_2fa_settings'); ?>
+                <?php wp_nonce_field('email_otp_login_settings'); ?>
                 
                 <table class="form-table">
                     <tr>
-                        <th scope="row"><?php _e('Enable Email 2FA', 'wp-starter-addon'); ?></th>
+                        <th scope="row">Enable OTP Login</th>
                         <td>
-                            <input type="checkbox" name="enabled" id="enabled" value="1" <?php checked($this->options['enabled'], '1'); ?>>
-                            <label for="enabled"><?php _e('Enable email OTP verification for login', 'wp-starter-addon'); ?></label>
+                            <input type="checkbox" name="email_otp_login_enabled" id="email_otp_login_enabled" value="1" <?php checked($enabled, '1'); ?>>
+                            <label for="email_otp_login_enabled">Enable email OTP verification for login</label>
                         </td>
                     </tr>
                     <tr>
-                        <th scope="row"><?php _e('OTP Expiry Time', 'wp-starter-addon'); ?></th>
+                        <th scope="row">OTP Expiry Time</th>
                         <td>
-                            <input type="number" name="expiry" id="expiry" value="<?php echo esc_attr($this->options['expiry']); ?>" min="1" max="60" class="small-text">
-                            <label for="expiry"><?php _e('minutes', 'wp-starter-addon'); ?></label>
-                            <p class="description"><?php _e('How long the OTP code remains valid (1-60 minutes)', 'wp-starter-addon'); ?></p>
+                            <input type="number" name="email_otp_login_expiry" id="email_otp_login_expiry" value="<?php echo esc_attr($expiry); ?>" min="1" max="60" class="small-text">
+                            <label for="email_otp_login_expiry">minutes</label>
+                            <p class="description">How long the OTP code remains valid (1-60 minutes)</p>
                         </td>
                     </tr>
                     <tr>
-                        <th scope="row"><?php _e('Rate Limit', 'wp-starter-addon'); ?></th>
+                        <th scope="row">Rate Limit</th>
                         <td>
-                            <input type="number" name="rate_limit" id="rate_limit" value="<?php echo esc_attr($this->options['rate_limit']); ?>" min="30" max="300" class="small-text">
-                            <label for="rate_limit"><?php _e('seconds', 'wp-starter-addon'); ?></label>
-                            <p class="description"><?php _e('Minimum time between OTP requests (30-300 seconds)', 'wp-starter-addon'); ?></p>
+                            <input type="number" name="email_otp_login_rate_limit" id="email_otp_login_rate_limit" value="<?php echo esc_attr($rate_limit); ?>" min="30" max="300" class="small-text">
+                            <label for="email_otp_login_rate_limit">seconds</label>
+                            <p class="description">Minimum time between OTP requests (30-300 seconds)</p>
                         </td>
                     </tr>
                 </table>
                 
-                <?php submit_button(); ?>
+                <?php submit_button('Save Email 2FA Settings'); ?>
             </form>
             
             <hr>
             
-            <h2><?php _e('Plugin Information', 'wp-starter-addon'); ?></h2>
-            <p><?php _e('This module adds two-factor authentication to WordPress login using email OTP codes.', 'wp-starter-addon'); ?></p>
-            <p><?php _e('Users can disable OTP for their accounts in their profile settings (not recommended).', 'wp-starter-addon'); ?></p>
+            <h2>Plugin Information</h2>
+            <p>This module adds two-factor authentication to WordPress login using email OTP codes.</p>
+            <p>Users can disable OTP for their accounts in their profile settings (not recommended).</p>
+            <p>Module Version: <?php echo self::VERSION; ?></p>
         </div>
         <?php
     }
 }
 
-// AJAX handler for getting all images (for bulk conversion)
-add_action('wp_ajax_wpsa_get_all_images', 'wpsa_get_all_images');
+// Initialize the main plugin
+WPStarterAddon::get_instance();
+
+// Activation notice
+add_action('admin_notices', 'wpsa_activation_notice');
+function wpsa_activation_notice() {
+    if (get_option('wpsa_activation_notice')) {
+        ?>
+        <div class="notice notice-success is-dismissible">
+            <p><strong>WP Starter Addon</strong> activated! Go to <a href="<?php echo admin_url('admin.php?page=wp-starter-addon'); ?>">WP Starter Addon</a> to configure your modules.</p>
+        </div>
+        <?php
+        delete_option('wpsa_activation_notice');
+    }
+}
+
+// Set activation notice on plugin activation
+register_activation_hook(__FILE__, function() {
+    add_option('wpsa_activation_notice', true);
+});
+
+// Add JavaScript for admin functionality
+add_action('admin_footer', 'wpsa_admin_js');
+function wpsa_admin_js() {
+    $screen = get_current_screen();
+    if (strpos($screen->id, 'wp-starter-addon') !== false || $screen->id === 'upload') {
+        ?>
+        <script type="text/javascript">
+        // Image Optimizer JavaScript
+        function convertSingleImage(attachmentId) {
+            if (confirm('Convert this image?')) {
+                jQuery.ajax({
+                    url: ajaxurl,
+                    type: 'POST',
+                    data: {
+                        action: 'convert_single_image',
+                        attachment_id: attachmentId,
+                        nonce: '<?php echo wp_create_nonce('convert_single_image'); ?>'
+                    },
+                    success: function(response) {
+                        if (response.success) {
+                            alert('Image converted successfully!');
+                            location.reload();
+                        } else {
+                            alert('Failed to convert image: ' + response.data);
+                        }
+                    },
+                    error: function() {
+                        alert('An error occurred while converting the image.');
+                    }
+                });
+            }
+        }
+        
+        // Bulk convert functionality
+        jQuery(document).ready(function($) {
+            $('#aic-convert-all').click(function() {
+                if (confirm('This will convert all images in your media library. This may take a while. Continue?')) {
+                    convertAllImages();
+                }
+            });
+            
+            function convertAllImages() {
+                $('#aic-progress').show();
+                
+                $.ajax({
+                    url: ajaxurl,
+                    type: 'POST',
+                    data: {
+                        action: 'get_all_images'
+                    },
+                    success: function(response) {
+                        if (response.success) {
+                            var images = response.data;
+                            var total = images.length;
+                            var converted = 0;
+                            
+                            function convertNext() {
+                                if (converted >= total) {
+                                    alert('All images converted!');
+                                    $('#aic-progress').hide();
+                                    return;
+                                }
+                                
+                                var imageId = images[converted];
+                                $.ajax({
+                                    url: ajaxurl,
+                                    type: 'POST',
+                                    data: {
+                                        action: 'convert_single_image',
+                                        attachment_id: imageId,
+                                        nonce: '<?php echo wp_create_nonce('convert_single_image'); ?>'
+                                    },
+                                    complete: function() {
+                                        converted++;
+                                        var percent = (converted / total) * 100;
+                                        $('#aic-progress-fill').css('width', percent + '%');
+                                        $('#aic-progress-text').text(Math.round(percent) + '% Complete (' + converted + '/' + total + ')');
+                                        
+                                        setTimeout(convertNext, 100);
+                                    }
+                                });
+                            }
+                            
+                            convertNext();
+                        }
+                    }
+                });
+            }
+        });
+        </script>
+        <?php
+    }
+}
+
+// AJAX handler for getting all images (Image Optimizer)
+add_action('wp_ajax_get_all_images', 'wpsa_get_all_images');
 function wpsa_get_all_images() {
     $images = get_posts(array(
         'post_type' => 'attachment',
@@ -1956,16 +1616,13 @@ function wpsa_get_all_images() {
     wp_send_json_success($images);
 }
 
-// Initialize the main plugin
-WPStarterAddon::get_instance();
-
 // Email logger for SMTP debugging
 add_action('wp_mail', function($args) {
-    $enabled_modules = get_option('wpsa_modules', array());
-    if (!empty($enabled_modules['smtp_mailer'])) {
-        $smtp_opts = get_option('wpsa_smtp_settings', array());
-        if (!empty($smtp_opts['debug_mode'])) {
-            error_log(sprintf("WPSA SMTP Log: To=%s Subject=%s", 
+    $modules = get_option('wpsa_modules', array());
+    if (!empty($modules['smtp_mailer'])) {
+        $opts = get_option('ssm_settings');
+        if (!empty($opts['debug_mode'])) {
+            error_log(sprintf("WP Starter Addon SMTP Log: To=%s Subject=%s", 
                 is_array($args['to']) ? implode(',', $args['to']) : $args['to'], 
                 $args['subject']
             ));
@@ -1973,37 +1630,272 @@ add_action('wp_mail', function($args) {
     }
 });
 
-// Add activation notice
-add_action('admin_notices', 'wpsa_activation_notice');
-function wpsa_activation_notice() {
-    if (get_option('wpsa_activation_notice')) {
-        ?>
-        <div class="notice notice-success is-dismissible">
-            <p><strong>WP Starter Addon</strong> activated successfully! Go to <a href="<?php echo admin_url('admin.php?page=wp-starter-addon'); ?>">WP Starter Addon</a> to configure your modules.</p>
-        </div>
-        <?php
-        delete_option('wpsa_activation_notice');
-    }
-}
-
-// Set activation notice on plugin activation
-register_activation_hook(__FILE__, function() {
-    add_option('wpsa_activation_notice', true);
-});
-
-// Debug function for Custom Scripts (remove after testing)
+// Debug function for Custom Scripts Manager
 add_action('wp_footer', 'wpsa_csm_debug_info');
 function wpsa_csm_debug_info() {
-    $enabled_modules = get_option('wpsa_modules', array());
-    if (!empty($enabled_modules['custom_scripts']) && current_user_can('manage_options') && isset($_GET['wpsa_debug'])) {
-        $head_scripts = get_option('wpsa_csm_global_head_scripts', '');
-        $body_scripts = get_option('wpsa_csm_global_body_scripts', '');
+    $modules = get_option('wpsa_modules', array());
+    if (!empty($modules['custom_scripts']) && current_user_can('manage_options') && isset($_GET['csm_debug'])) {
+        $head_scripts = get_option('csm_global_head_scripts', '');
+        $body_scripts = get_option('csm_global_body_scripts', '');
         echo '<div style="position: fixed; bottom: 0; right: 0; background: black; color: white; padding: 10px; z-index: 9999; max-width: 300px; font-size: 12px;">';
-        echo '<strong>WPSA CSM Debug:</strong><br>';
+        echo '<strong>WP Starter Addon CSM Debug:</strong><br>';
         echo 'Head: ' . (empty($head_scripts) ? 'Empty' : strlen($head_scripts) . ' chars') . '<br>';
         echo 'Body: ' . (empty($body_scripts) ? 'Empty' : strlen($body_scripts) . ' chars') . '<br>';
-        echo '<a href="' . remove_query_arg('wpsa_debug') . '" style="color: yellow;">Hide</a>';
+        echo '<a href="' . remove_query_arg('csm_debug') . '" style="color: yellow;">Hide</a>';
         echo '</div>';
     }
 }
+
+// Schedule cleanup for Email 2FA
+add_action('wp', 'wpsa_schedule_cleanup');
+function wpsa_schedule_cleanup() {
+    if (!wp_next_scheduled('email_otp_cleanup_event')) {
+        wp_schedule_event(time(), 'daily', 'email_otp_cleanup_event');
+    }
+}
+
+add_action('email_otp_cleanup_event', function() {
+    $modules = get_option('wpsa_modules', array());
+    if (!empty($modules['email_2fa'])) {
+        $email_2fa = new WPSA_Email2FA();
+        $email_2fa->cleanup_expired_otp_codes();
+    }
+});
+
+// Uninstall cleanup
+register_uninstall_hook(__FILE__, 'wpsa_uninstall_cleanup');
+function wpsa_uninstall_cleanup() {
+    // Remove all plugin options
+    delete_option('wpsa_modules');
+    delete_option('csm_global_head_scripts');
+    delete_option('csm_global_body_scripts');
+    delete_option('ssm_settings');
+    delete_option('aic_settings');
+    delete_option('email_otp_login_enabled');
+    delete_option('email_otp_login_expiry');
+    delete_option('email_otp_login_rate_limit');
+    delete_option('wpsa_activation_notice');
+    
+    // Clear scheduled events
+    wp_clear_scheduled_hook('email_otp_cleanup_event');
+    
+    // Clean up user meta for Email 2FA
+    $users = get_users(array('fields' => 'ID'));
+    foreach ($users as $user_id) {
+        delete_user_meta($user_id, 'login_otp_code');
+        delete_user_meta($user_id, 'login_otp_expiry');
+        delete_user_meta($user_id, 'login_otp_last_sent');
+        delete_user_meta($user_id, 'disable_login_otp');
+        delete_user_meta($user_id, '_csm_head_scripts');
+        delete_user_meta($user_id, '_csm_body_scripts');
+    }
+}
+
+// Add settings link to plugins page
+add_filter('plugin_action_links_' . plugin_basename(__FILE__), 'wpsa_add_settings_link');
+function wpsa_add_settings_link($links) {
+    $settings_link = '<a href="' . admin_url('admin.php?page=wp-starter-addon') . '">Settings</a>';
+    array_unshift($links, $settings_link);
+    return $links;
+}
+
+// Add plugin meta links
+add_filter('plugin_row_meta', 'wpsa_add_plugin_meta_links', 10, 2);
+function wpsa_add_plugin_meta_links($links, $file) {
+    if (plugin_basename(__FILE__) === $file) {
+        $meta_links = array(
+            '<a href="https://github.com/drshounak/wordpress-plugins" target="_blank">GitHub</a>',
+            '<a href="https://twitter.com/drshounakpal" target="_blank">Support</a>'
+        );
+        return array_merge($links, $meta_links);
+    }
+    return $links;
+}
+
+// Add admin CSS for better styling
+add_action('admin_head', 'wpsa_admin_css');
+function wpsa_admin_css() {
+    $screen = get_current_screen();
+    if (strpos($screen->id, 'wp-starter-addon') !== false) {
+        ?>
+        <style>
+        .wpsa-modules-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+            gap: 20px;
+            margin: 20px 0;
+        }
+        .wpsa-module-card {
+            background: #fff;
+            border: 1px solid #ccd0d4;
+            border-radius: 4px;
+            padding: 20px;
+            box-shadow: 0 1px 1px rgba(0,0,0,.04);
+            transition: box-shadow 0.3s ease;
+        }
+        .wpsa-module-card:hover {
+            box-shadow: 0 2px 8px rgba(0,0,0,.1);
+        }
+        .wpsa-module-card h3 {
+            margin-top: 0;
+            color: #23282d;
+            font-size: 18px;
+        }
+        .wpsa-module-card p {
+            color: #666;
+            margin-bottom: 15px;
+            line-height: 1.5;
+        }
+        .wpsa-module-card label {
+            font-weight: 600;
+            color: #0073aa;
+            cursor: pointer;
+        }
+        .wpsa-module-card input[type="checkbox"] {
+            margin-right: 8px;
+        }
+        .wpsa-info-section {
+            background: #f9f9f9;
+            border: 1px solid #e5e5e5;
+            border-radius: 4px;
+            padding: 20px;
+            margin-top: 30px;
+        }
+        .wpsa-info-section h2 {
+            margin-top: 0;
+            color: #23282d;
+        }
+        .wpsa-info-section p {
+            margin-bottom: 10px;
+        }
+        .wpsa-info-section a {
+            color: #0073aa;
+            text-decoration: none;
+        }
+        .wpsa-info-section a:hover {
+            text-decoration: underline;
+        }
+        
+        /* Progress bar styles for Image Optimizer */
+        #aic-progress {
+            margin: 20px 0;
+            padding: 15px;
+            background: #f9f9f9;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+        }
+        #aic-progress-bar {
+            width: 100%;
+            background-color: #f0f0f0;
+            border-radius: 3px;
+            margin: 10px 0;
+            overflow: hidden;
+        }
+        #aic-progress-fill {
+            height: 20px;
+            background-color: #0073aa;
+            border-radius: 3px;
+            width: 0%;
+            transition: width 0.3s ease;
+        }
+        #aic-progress-text {
+            text-align: center;
+            font-weight: 600;
+            color: #23282d;
+        }
+        
+        /* Custom Scripts Manager styles */
+        .csm-textarea {
+            width: 100%;
+            height: 120px;
+            font-family: 'Monaco', 'Menlo', 'Ubuntu Mono', monospace;
+            font-size: 13px;
+            line-height: 1.4;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            padding: 10px;
+            background: #f9f9f9;
+        }
+        .csm-section {
+            margin: 15px 0;
+        }
+        .csm-label {
+            font-weight: bold;
+            margin-bottom: 5px;
+            display: block;
+            color: #23282d;
+        }
+        
+        /* Responsive design */
+        @media (max-width: 768px) {
+            .wpsa-modules-grid {
+                grid-template-columns: 1fr;
+            }
+        }
+        </style>
+        <?php
+    }
+}
+
+// Add contextual help
+add_action('load-toplevel_page_wp-starter-addon', 'wpsa_add_help_tab');
+function wpsa_add_help_tab() {
+    $screen = get_current_screen();
+    
+    $screen->add_help_tab(array(
+        'id' => 'wpsa_overview',
+        'title' => 'Overview',
+        'content' => '
+            <h3>WP Starter Addon Overview</h3>
+            <p>WP Starter Addon is a comprehensive WordPress toolkit that combines four powerful modules:</p>
+            <ul>
+                <li><strong>Custom Scripts Manager:</strong> Add custom scripts to head or body sections</li>
+                <li><strong>SMTP Mailer:</strong> Configure reliable email delivery with SMTP</li>
+                <li><strong>Image Optimizer:</strong> Automatically convert and optimize images</li>
+                <li><strong>Email 2FA:</strong> Add two-factor authentication for enhanced security</li>
+            </ul>
+            <p>You can enable or disable any module as needed from the main settings page.</p>
+        '
+    ));
+    
+    $screen->add_help_tab(array(
+        'id' => 'wpsa_modules',
+        'title' => 'Module Details',
+        'content' => '
+            <h3>Module Details</h3>
+            <h4>Custom Scripts Manager</h4>
+            <p>Add analytics codes, custom CSS, JavaScript, and other scripts to your website globally or per page/post.</p>
+            
+            <h4>SMTP Mailer</h4>
+            <p>Configure SMTP settings for reliable email delivery. Supports all major email providers.</p>
+            
+            <h4>Image Optimizer</h4>
+            <p>Automatically converts uploaded images to WebP or AVIF format with customizable compression and resizing.</p>
+            
+            <h4>Email 2FA</h4>
+            <p>Adds an extra layer of security by requiring email verification codes during login.</p>
+        '
+    ));
+    
+    $screen->set_help_sidebar('
+        <p><strong>For more information:</strong></p>
+        <p><a href="https://github.com/drshounak/wordpress-plugins" target="_blank">GitHub Repository</a></p>
+        <p><a href="https://twitter.com/drshounakpal" target="_blank">Support on Twitter</a></p>
+    ');
+}
+
+// Version check and update notice
+add_action('admin_notices', 'wpsa_version_check');
+function wpsa_version_check() {
+    $current_version = get_option('wpsa_version', '0.0.0');
+    if (version_compare($current_version, WPSA_VERSION, '<')) {
+        update_option('wpsa_version', WPSA_VERSION);
+        ?>
+        <div class="notice notice-info is-dismissible">
+            <p><strong>WP Starter Addon</strong> has been updated to version <?php echo WPSA_VERSION; ?>. <a href="<?php echo admin_url('admin.php?page=wp-starter-addon'); ?>">Review your settings</a>.</p>
+        </div>
+        <?php
+    }
+}
+
 ?>
